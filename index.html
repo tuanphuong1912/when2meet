@@ -488,9 +488,15 @@
                 </span>
                 <div>
                   <div class="text-xs sm:text-sm font-semibold text-slate-900" id="my-signed-in-name">Minh Anh</div>
-                  <button id="btn-signout-participant" type="button" class="text-[11px] text-slate-500 hover:text-emerald-700 underline underline-offset-2 cursor-pointer">
-                    Đổi người khác
-                  </button>
+                  <div class="flex items-center gap-2 mt-0.5">
+                    <button id="btn-signout-participant" type="button" class="text-[11px] text-slate-500 hover:text-emerald-700 underline underline-offset-2 cursor-pointer">
+                      Đổi người khác
+                    </button>
+                    <span class="text-slate-300 text-[10px]">•</span>
+                    <button id="btn-delete-self-participant" type="button" class="text-[11px] text-rose-500 hover:text-rose-700 underline underline-offset-2 cursor-pointer">
+                      Xóa tên khỏi lịch
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -504,29 +510,30 @@
               </div>
             </div>
 
-            <!-- Chú thích màu -->
-            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-[#FAF9F6] px-3 py-2 rounded-xl border border-[#E5E2DC]">
+            <!-- Chú thích màu cá nhân -->
+            <div class="flex items-center justify-between text-xs text-slate-500 bg-[#FAF9F6] px-3 py-2 rounded-xl border border-[#E5E2DC]">
               <div class="flex items-center gap-3">
                 <span class="inline-flex items-center gap-1.5">
-                  <span class="w-3.5 h-3.5 rounded-xs bg-emerald-500 border border-emerald-600 inline-block"></span>
+                  <span class="w-3.5 h-3.5 rounded-sm bg-emerald-500 border border-emerald-600"></span>
                   <span>Rảnh</span>
                 </span>
                 <span class="inline-flex items-center gap-1.5">
-                  <span class="w-3.5 h-3.5 rounded-xs bg-white border border-slate-300 inline-block"></span>
+                  <span class="w-3.5 h-3.5 rounded-sm bg-white border border-slate-300"></span>
                   <span>Chưa rảnh</span>
                 </span>
               </div>
-              <span class="text-[11px] text-slate-500">Nhấn giữ & kéo để tô vùng giờ</span>
+              <span class="hidden sm:inline text-[11px]">Nhấn giữ & kéo để tô vùng giờ</span>
             </div>
 
-            <!-- Bảng lưới cá nhân (tách riêng từng bảng ngày) -->
-            <div id="my-availability-grid" class="w-full no-select paint-grid">
+            <!-- Các bảng lưới chọn giờ cá nhân (tách riêng theo từng ngày) -->
+            <div id="my-availability-grid" class="no-select paint-grid">
+              <!-- Được dựng tự động bằng JS -->
             </div>
           </div>
         </div>
 
         <!-- =============================================================== -->
-        <!-- CỘT PHẢI: BẢN ĐỒ NHIỆT THỜI GIAN RẢNH CỦA CẢ NHÓM               -->
+        <!-- CỘT PHẢI: THỜI GIAN RẢNH CỦA CẢ NHÓM (HEATMAP)                  -->
         <!-- =============================================================== -->
         <div id="panel-group-availability" class="hidden lg:block lg:col-span-6 bg-white rounded-2xl border border-[#E5E2DC] shadow-2xs overflow-hidden">
           <div class="p-4 sm:p-5 border-b border-[#E5E2DC] flex flex-wrap items-center justify-between gap-2 bg-[#FAF9F6]/60">
@@ -536,75 +543,71 @@
                 Di chuột hoặc chạm vào từng ô giờ để xem ai có thể tham gia
               </p>
             </div>
-            <!-- Huy hiệu đang lọc theo 1 thành viên -->
+            <!-- Bộ lọc đang kích hoạt -->
             <div id="filter-active-badge" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
-              <span id="filter-active-label">Đang lọc: ...</span>
-              <button id="btn-clear-filter" type="button" class="hover:text-rose-600 font-bold ml-0.5 cursor-pointer" title="Bỏ lọc">&times;</button>
+              <span id="filter-active-label">Đang lọc</span>
+              <button id="btn-clear-filter" type="button" class="ml-0.5 hover:text-amber-950 font-bold cursor-pointer">&times;</button>
             </div>
           </div>
 
           <div class="p-4 sm:p-5 space-y-4">
-            <!-- Thang màu độ rảnh -->
-            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-[#FAF9F6] px-3 py-2 rounded-xl border border-[#E5E2DC]">
+            <!-- Thang màu Heatmap -->
+            <div class="flex items-center justify-between gap-2 text-xs bg-[#FAF9F6] px-3 py-2 rounded-xl border border-[#E5E2DC]">
               <span id="heatmap-legend-min" class="font-medium text-slate-500">0/0 rảnh</span>
-              <div class="flex items-center gap-1">
-                <span class="w-5 h-3.5 rounded-xs bg-white border border-slate-300" title="0%"></span>
-                <span class="w-5 h-3.5 rounded-xs bg-emerald-100 border border-emerald-200" title="25%"></span>
-                <span class="w-5 h-3.5 rounded-xs bg-emerald-300 border border-emerald-400" title="50%"></span>
-                <span class="w-5 h-3.5 rounded-xs bg-emerald-500 border border-emerald-600" title="75%"></span>
-                <span class="w-5 h-3.5 rounded-xs bg-emerald-700 border border-emerald-800" title="100%"></span>
+              <div class="flex items-center gap-1" title="Mức độ trùng lịch từ ít đến nhiều người rảnh nhất">
+                <span class="w-4 h-3.5 rounded-xs bg-white border border-slate-300"></span>
+                <span class="w-4 h-3.5 rounded-xs bg-emerald-100 border border-emerald-200"></span>
+                <span class="w-4 h-3.5 rounded-xs bg-emerald-300 border border-emerald-400"></span>
+                <span class="w-4 h-3.5 rounded-xs bg-emerald-500 border border-emerald-600"></span>
+                <span class="w-4 h-3.5 rounded-xs bg-emerald-700 border border-emerald-800"></span>
               </div>
               <span id="heatmap-legend-max" class="font-semibold text-emerald-800">0/0 rảnh</span>
             </div>
 
-            <!-- Bảng bản đồ nhiệt cả nhóm (tách riêng từng bảng ngày) -->
-            <div id="group-heatmap-grid" class="w-full no-select">
+            <!-- Các bảng lưới bản đồ nhiệt nhóm (tách riêng theo từng ngày) -->
+            <div id="group-heatmap-grid" class="no-select">
+              <!-- Được dựng tự động bằng JS -->
             </div>
 
-            <!-- Bảng chi tiết khung giờ khi di chuột / chạm -->
-            <div id="slot-inspector-card" class="rounded-xl border border-[#E5E2DC] bg-[#FAF9F6] p-4 space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5E2DC] pb-2.5">
-                <div>
-                  <span class="text-[11px] uppercase tracking-wider font-semibold text-slate-400 block">Chi tiết khung giờ</span>
-                  <h3 id="inspector-slot-title" class="text-sm font-bold text-slate-900">
-                    Chưa có dữ liệu
-                  </h3>
+            <!-- Bảng kiểm tra chi tiết ô giờ đang xem -->
+            <div id="slot-inspector-card" class="rounded-xl bg-[#FAF9F6] border border-[#E5E2DC] p-3.5 sm:p-4 space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-[#E5E2DC] pb-2">
+                <div class="text-xs sm:text-sm font-semibold text-slate-900" id="inspector-slot-title">
+                  Di chuột vào một ô trên bảng
                 </div>
-                <span id="inspector-fraction-badge" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <span id="inspector-fraction-badge" class="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
                   0/0 người rảnh
                 </span>
               </div>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <!-- Danh sách người rảnh -->
-                <div class="space-y-1.5">
-                  <div class="font-semibold text-emerald-800 flex items-center gap-1.5">
+                <div>
+                  <div class="font-semibold text-emerald-700 mb-1.5 flex items-center gap-1">
                     <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
                     <span>Có thể tham gia</span>
                   </div>
-                  <div id="inspector-available-list" class="flex flex-wrap gap-1.5">
-                    <span class="text-slate-400 italic">Chưa có ai</span>
+                  <div id="inspector-available-list" class="flex flex-wrap gap-1.5 text-slate-600">
+                    <span class="text-slate-400 italic">Chưa có dữ liệu</span>
                   </div>
                 </div>
 
-                <!-- Danh sách người chưa rảnh -->
-                <div class="space-y-1.5">
-                  <div class="font-semibold text-slate-500 flex items-center gap-1.5">
+                <div>
+                  <div class="font-semibold text-slate-500 mb-1.5 flex items-center gap-1">
                     <span class="w-2 h-2 rounded-full bg-slate-300"></span>
-                    <span>Chưa rảnh</span>
+                    <span>Chưa rảnh / Chưa điền</span>
                   </div>
-                  <div id="inspector-unavailable-list" class="flex flex-wrap gap-1.5">
-                    <span class="text-slate-400 italic">Không có</span>
+                  <div id="inspector-unavailable-list" class="flex flex-wrap gap-1.5 text-slate-500">
+                    <span class="text-slate-400 italic">Chưa có dữ liệu</span>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- Danh sách thành viên & Bộ lọc -->
+            <!-- Danh sách thành viên & Bộ lọc + Nút xóa -->
             <div class="space-y-2 pt-1">
-              <div class="flex items-center justify-between text-xs">
+              <div class="flex flex-wrap items-center justify-between gap-1 text-xs">
                 <span class="font-semibold text-slate-700">Thành viên đã tham gia</span>
-                <span class="text-slate-400">Bấm vào tên để lọc lịch riêng</span>
+                <span class="text-slate-400">Bấm tên để lọc • Bấm <strong class="text-slate-600">&times;</strong> để xóa</span>
               </div>
               <div id="participants-filter-list" class="flex flex-wrap gap-1.5">
                 <span class="text-xs text-slate-400 italic">Chưa có thành viên nào nhập lịch.</span>
@@ -654,16 +657,65 @@
     </div>
   </div>
 
+  <!-- Hộp thoại xác nhận xóa thành viên -->
+  <div id="delete-participant-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 backdrop-blur-[2px] p-4">
+    <div class="bg-white rounded-2xl border border-[#E5E2DC] max-w-sm w-full p-5 sm:p-6 shadow-xl space-y-4">
+      <div class="flex items-start gap-3">
+        <div class="w-10 h-10 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center shrink-0">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            <line x1="10" y1="11" x2="10" y2="17"></line>
+            <line x1="14" y1="11" x2="14" y2="17"></line>
+          </svg>
+        </div>
+        <div class="space-y-1">
+          <h3 class="text-base font-bold text-slate-900">Xóa người tham gia</h3>
+          <p id="delete-modal-desc" class="text-xs sm:text-sm text-slate-600 leading-relaxed">
+            Bạn có chắc muốn xóa thành viên này khỏi bảng khảo sát?
+          </p>
+        </div>
+      </div>
+
+      <!-- Ô nhập mã PIN nếu người này có đặt PIN bảo vệ -->
+      <div id="delete-modal-pin-box" class="hidden space-y-1.5">
+        <label for="input-delete-pin" class="block text-xs font-semibold text-slate-700">
+          Nhập mã PIN 4 số của thành viên này để xác nhận
+        </label>
+        <input
+          id="input-delete-pin"
+          type="password"
+          inputmode="numeric"
+          pattern="[0-9]*"
+          maxlength="4"
+          placeholder="••••"
+          class="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF9F6] focus:bg-white border border-[#E5E2DC] text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500/30 focus:border-rose-500"
+        />
+      </div>
+
+      <p id="delete-modal-error" class="hidden text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></p>
+
+      <div class="flex items-center justify-end gap-2 pt-1">
+        <button id="btn-cancel-delete-participant" type="button" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-medium bg-[#FAF9F6] hover:bg-slate-100 text-slate-700 border border-[#E5E2DC] transition-colors cursor-pointer">
+          Hủy
+        </button>
+        <button id="btn-confirm-delete-participant" type="button" class="px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-2xs transition-colors cursor-pointer">
+          Xóa khỏi lịch
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- ======================================================================= -->
   <!-- LOGIC ỨNG DỤNG & ĐỒNG BỘ DỮ LIỆU THỜI GIAN THỰC                         -->
   <!-- ======================================================================= -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     // =========================================================================
-    // [CẤU HÌNH CHO GITHUB PAGES] DÁN MÃ CẤU HÌNH FIREBASE CỦA BẠN VÀO ĐÂY
+    // [CẤU HÌNH CHO GITHUB PAGES] MÃ CẤU HÌNH FIREBASE CỦA BẠN
     // =========================================================================
     const CUSTOM_FIREBASE_CONFIG = {
       apiKey: "AIzaSyBkdJZPmpJ35pFv_mhKBD8TlEMDyhs2ezE",
@@ -756,6 +808,7 @@
       currentParticipant: null,
       mySelectedSlots: new Set(),
       filterParticipantId: null,
+      pendingDeleteParticipant: null,
       inspectedSlotKey: null,
       mobileTab: 'mine',
 
@@ -840,7 +893,7 @@
       return slots;
     }
 
-    // Sinh mã sự kiện ngắn gọn 6 ký tự dễ đọc (loại bỏ I, O, 0, 1 tránh nhầm lẫn)
+    // Sinh mã sự kiện ngắn gọn 6 ký tự dễ đọc
     function generateEventCode() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       let code = '';
@@ -1040,12 +1093,28 @@
           responsesColRef,
           (snapshot) => {
             const responses = [];
+            const activeIds = new Set();
             snapshot.forEach((docSnap) => {
               const data = docSnap.data();
               const item = { id: docSnap.id, ...data };
               responses.push(item);
+              activeIds.add(item.id);
               memoryResponses.set(item.id, item);
             });
+
+            // Đồng bộ xóa các bản ghi đã bị xóa trên máy chủ
+            Array.from(memoryResponses.keys()).forEach((key) => {
+              if (!activeIds.has(key)) {
+                memoryResponses.delete(key);
+              }
+            });
+
+            if (state.currentParticipant && !activeIds.has(state.currentParticipant.id)) {
+              state.currentParticipant = null;
+              state.mySelectedSlots = new Set();
+              renderYourPanel();
+            }
+
             responses.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
             state.allResponses = responses;
             saveLocalFallback();
@@ -1091,6 +1160,33 @@
           await setDoc(respDocRef, respObj);
         } catch (err) {
           console.error("Lỗi lưu thời gian rảnh lên đám mây:", err);
+        }
+      }
+    }
+
+    async function deleteParticipantResponse(participantId) {
+      if (!participantId) return;
+      memoryResponses.delete(participantId);
+      state.allResponses = Array.from(memoryResponses.values());
+
+      if (state.filterParticipantId === participantId) {
+        state.filterParticipantId = null;
+      }
+      if (state.currentParticipant && state.currentParticipant.id === participantId) {
+        state.currentParticipant = null;
+        state.mySelectedSlots = new Set();
+        renderYourPanel();
+      }
+
+      saveLocalFallback();
+      refreshAllViewsFromState();
+
+      if (useCloudBackend && db) {
+        try {
+          const respDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'w2m_responses', participantId);
+          await deleteDoc(respDocRef);
+        } catch (err) {
+          console.error("Lỗi xóa thành viên trên đám mây:", err);
         }
       }
     }
@@ -1964,15 +2060,27 @@
       listEl.innerHTML = responses.map((resp) => {
         const isFiltered = state.filterParticipantId === resp.id;
         const slotCount = Array.isArray(resp.slots) ? resp.slots.length : 0;
-        const btnClass = isFiltered
+        const wrapperClass = isFiltered
           ? 'bg-emerald-600 text-white border-emerald-700 font-semibold shadow-2xs'
           : 'bg-[#FAF9F6] hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border-[#E5E2DC]';
+        const deleteBtnClass = isFiltered
+          ? 'text-emerald-100 hover:text-white hover:bg-emerald-700'
+          : 'text-slate-400 hover:text-rose-600 hover:bg-rose-100/80';
 
         return `
-          <button type="button" data-filter-id="${resp.id}" class="participant-chip px-3 py-1.5 rounded-xl text-xs border transition-all flex items-center gap-1.5 cursor-pointer ${btnClass}">
-            <span>${escapeHtml(resp.name)}</span>
-            <span class="text-[10px] opacity-75">(${slotCount})</span>
-          </button>
+          <div class="inline-flex items-center rounded-xl text-xs border transition-all overflow-hidden ${wrapperClass}">
+            <button type="button" data-filter-id="${resp.id}" class="participant-chip pl-3 pr-2 py-1.5 flex items-center gap-1.5 cursor-pointer">
+              <span>${escapeHtml(resp.name)}</span>
+              <span class="text-[10px] opacity-75">(${slotCount})</span>
+            </button>
+            <button
+              type="button"
+              data-delete-id="${resp.id}"
+              title="Xóa ${escapeHtml(resp.name)} khỏi lịch"
+              aria-label="Xóa ${escapeHtml(resp.name)}"
+              class="participant-delete-btn pr-2.5 pl-1.5 py-1.5 transition-colors cursor-pointer font-bold ${deleteBtnClass}"
+            >&times;</button>
+          </div>
         `;
       }).join('');
 
@@ -1987,6 +2095,77 @@
           }
         });
       });
+
+      listEl.querySelectorAll('.participant-delete-btn').forEach((delBtn) => {
+        delBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const pId = delBtn.getAttribute('data-delete-id');
+          const targetResp = responses.find((r) => r.id === pId);
+          if (targetResp) {
+            openDeleteParticipantModal(targetResp);
+          }
+        });
+      });
+    }
+
+    function openDeleteParticipantModal(resp) {
+      const modal = document.getElementById('delete-participant-modal');
+      const descEl = document.getElementById('delete-modal-desc');
+      const pinBox = document.getElementById('delete-modal-pin-box');
+      const pinInput = document.getElementById('input-delete-pin');
+      const errorEl = document.getElementById('delete-modal-error');
+      if (!modal || !descEl || !pinBox || !pinInput || !errorEl) return;
+
+      state.pendingDeleteParticipant = resp;
+      descEl.innerHTML = `Bạn có chắc muốn xóa <strong>${escapeHtml(resp.name)}</strong> và toàn bộ khung giờ của người này khỏi bảng khảo sát?`;
+      errorEl.classList.add('hidden');
+      pinInput.value = '';
+
+      const isSelfSignedIn = state.currentParticipant && state.currentParticipant.id === resp.id;
+      if (resp.pin && !isSelfSignedIn) {
+        pinBox.classList.remove('hidden');
+      } else {
+        pinBox.classList.add('hidden');
+      }
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      if (resp.pin && !isSelfSignedIn) {
+        pinInput.focus();
+      }
+    }
+
+    function closeDeleteParticipantModal() {
+      const modal = document.getElementById('delete-participant-modal');
+      if (!modal) return;
+      state.pendingDeleteParticipant = null;
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    async function confirmDeleteParticipant() {
+      const target = state.pendingDeleteParticipant;
+      if (!target) return;
+
+      const pinInput = document.getElementById('input-delete-pin');
+      const errorEl = document.getElementById('delete-modal-error');
+      const isSelfSignedIn = state.currentParticipant && state.currentParticipant.id === target.id;
+
+      if (target.pin && !isSelfSignedIn) {
+        const enteredPin = (pinInput ? pinInput.value : '').trim();
+        if (enteredPin !== target.pin) {
+          errorEl.textContent = 'Mã PIN không chính xác. Vui lòng nhập đúng PIN 4 số để xóa.';
+          errorEl.classList.remove('hidden');
+          if (pinInput) pinInput.focus();
+          return;
+        }
+      }
+
+      const deletedName = target.name;
+      const deletedId = target.id;
+      closeDeleteParticipantModal();
+      await deleteParticipantResponse(deletedId);
+      showToast(`Đã xóa "${deletedName}" khỏi bảng khảo sát!`);
     }
 
     function renderBestTimes(event, responses) {
@@ -2330,31 +2509,44 @@
         btn.addEventListener('click', () => {
           state.stepMinutes = Number(btn.dataset.step) || 30;
           document.querySelectorAll('.step-option-btn').forEach((b) => {
-            if (b === btn) {
-              b.className = 'step-option-btn py-2 px-3 rounded-lg text-xs font-semibold bg-white text-emerald-700 shadow-2xs border border-[#E5E2DC] transition-all cursor-pointer';
-            } else {
-              b.className = 'step-option-btn py-2 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
-            }
+            const active = b === btn;
+            b.className = active
+              ? 'step-option-btn py-2 px-3 rounded-lg text-xs font-semibold bg-white text-emerald-700 shadow-2xs border border-[#E5E2DC] transition-all cursor-pointer'
+              : 'step-option-btn py-2 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
           });
           updateCreateSummary();
         });
       });
 
-      // Tạo lịch hẹn mới
+      // Nút tạo sự kiện mới
       document.getElementById('btn-create-event').addEventListener('click', handleCreateEvent);
-      document.getElementById('input-event-title').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          handleCreateEvent();
-        }
-      });
 
-      // Đăng nhập / Đổi người tham gia
+      // Đăng nhập / Đổi người tham gia / Xóa tên khỏi lịch
       document.getElementById('signin-form').addEventListener('submit', handleParticipantSignIn);
       document.getElementById('btn-signout-participant').addEventListener('click', () => {
         state.currentParticipant = null;
         state.mySelectedSlots = new Set();
         renderYourPanel();
+      });
+      document.getElementById('btn-delete-self-participant').addEventListener('click', () => {
+        if (!state.currentParticipant) return;
+        const selfResp = state.allResponses.find((r) => r.id === state.currentParticipant.id) || state.currentParticipant;
+        openDeleteParticipantModal(selfResp);
+      });
+
+      // Hộp thoại xác nhận xóa thành viên
+      document.getElementById('btn-cancel-delete-participant').addEventListener('click', closeDeleteParticipantModal);
+      document.getElementById('btn-confirm-delete-participant').addEventListener('click', confirmDeleteParticipant);
+      document.getElementById('delete-participant-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'delete-participant-modal') {
+          closeDeleteParticipantModal();
+        }
+      });
+      document.getElementById('input-delete-pin').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          confirmDeleteParticipant();
+        }
       });
 
       // Chọn hết / Xóa hết khung giờ của cá nhân

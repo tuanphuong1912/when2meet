@@ -1,0 +1,2317 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>When2meet - Lên lịch hẹn nhóm</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+          },
+          colors: {
+            cream: '#FAF9F6',
+            borderWarm: '#E5E2DC',
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body {
+      background-color: #FAF9F6;
+      color: #1E293B;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Ngăn chọn văn bản ngoài ý muốn khi kéo tô lịch */
+    .no-select {
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* Tối ưu thao tác chạm kéo trên lưới thời gian */
+    .paint-grid {
+      touch-action: none;
+    }
+
+    /* Thanh cuộn mảnh cho bảng nhiều ngày */
+    .grid-scroll::-webkit-scrollbar {
+      height: 6px;
+      width: 6px;
+    }
+    .grid-scroll::-webkit-scrollbar-track {
+      background: #F4F2ED;
+      border-radius: 9999px;
+    }
+    .grid-scroll::-webkit-scrollbar-thumb {
+      background: #CBD5E1;
+      border-radius: 9999px;
+    }
+    .grid-scroll::-webkit-scrollbar-thumb:hover {
+      background: #94A3B8;
+    }
+
+    /* Đường kẻ phân tách giờ chẵn và nửa giờ */
+    .slot-border-hour {
+      border-top: 1px solid #CBD5E1;
+    }
+    .slot-border-half {
+      border-top: 1px dashed #E5E2DC;
+    }
+
+    /* Hiệu ứng chuyển màu mượt mà cho từng ô giờ */
+    .slot-cell {
+      transition: background-color 0.08s ease, box-shadow 0.08s ease;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col antialiased selection:bg-emerald-100 selection:text-emerald-900">
+
+  <!-- Thanh điều hướng trên cùng -->
+  <header class="sticky top-0 z-30 bg-[#FAF9F6]/95 backdrop-blur-sm border-b border-[#E5E2DC]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <!-- Logo / Về trang chủ -->
+      <button id="btn-go-home" type="button" class="flex items-center gap-2.5 text-left group focus:outline-none cursor-pointer">
+        <div class="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-xs group-hover:bg-emerald-700 transition-colors">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="3"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+            <rect x="7" y="14" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"></rect>
+            <rect x="14" y="14" width="3" height="3" rx="0.5" fill="currentColor" stroke="none"></rect>
+          </svg>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-slate-900 tracking-tight text-base sm:text-lg">When2meet</span>
+            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/80">
+              Lên lịch hẹn nhóm
+            </span>
+          </div>
+        </div>
+      </button>
+
+      <!-- Các nút thao tác bên phải -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Trạng thái đồng bộ -->
+        <div id="sync-indicator" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-white border border-[#E5E2DC] text-slate-600">
+          <span id="sync-dot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="sync-text">Đang kết nối...</span>
+        </div>
+
+        <!-- Nút hiển thị khi đang mở một sự kiện -->
+        <div id="header-event-actions" class="hidden items-center gap-2">
+          <button id="btn-header-copy-code" type="button" title="Bấm để sao chép mã sự kiện" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-[#E5E2DC] hover:border-emerald-300 shadow-2xs transition-all active:scale-[0.98] cursor-pointer">
+            <span class="text-slate-400 font-normal">Mã:</span>
+            <span id="header-event-code-text" class="font-mono tracking-wider text-emerald-700">------</span>
+            <svg class="w-3.5 h-3.5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+
+          <button id="btn-new-event-top" type="button" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-all active:scale-[0.98] cursor-pointer">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span class="hidden sm:inline">Tạo lịch mới</span>
+            <span class="sm:hidden">Mới</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Nội dung chính -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+    <!-- ===================================================================== -->
+    <!-- MÀN HÌNH 1: TẠO SỰ KIỆN MỚI & THAM GIA BẰNG MÃ                        -->
+    <!-- ===================================================================== -->
+    <section id="create-view" class="max-w-4xl mx-auto space-y-6 sm:space-y-8">
+      <!-- Tiêu đề giới thiệu -->
+      <div class="text-center max-w-2xl mx-auto space-y-2">
+        <h1 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+          Tìm giờ rảnh chung cho cả nhóm
+        </h1>
+        <p class="text-sm sm:text-base text-slate-600">
+          Tạo lịch hẹn mới hoặc nhập mã sự kiện được chia sẻ để cùng mọi người đánh dấu thời gian rảnh theo thời gian thực.
+        </p>
+      </div>
+
+      <!-- Khung Tham gia sự kiện có sẵn -->
+      <div class="bg-white rounded-2xl border border-[#E5E2DC] p-4 sm:p-5 shadow-2xs">
+        <form id="join-event-form" class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-start sm:items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 flex items-center justify-center shrink-0">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                <polyline points="10 17 15 12 10 7"></polyline>
+                <line x1="15" y1="12" x2="3" y2="12"></line>
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-slate-900">Tham gia sự kiện có sẵn</h2>
+              <p class="text-xs text-slate-500">Dán <strong>Mã sự kiện</strong> (ví dụ: <span class="font-mono font-semibold text-slate-700">NHOM01</span>) hoặc dán nguyên đường link mời</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <input
+              id="input-join-code"
+              type="text"
+              placeholder="Nhập mã hoặc link mời..."
+              class="w-full sm:w-56 px-3.5 py-2.5 rounded-xl bg-[#FAF9F6] focus:bg-white border border-[#E5E2DC] text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+            />
+            <button type="submit" class="shrink-0 px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-semibold transition-all active:scale-[0.98] cursor-pointer">
+              Mở lịch
+            </button>
+          </div>
+        </form>
+        <p id="join-error-msg" class="hidden mt-2.5 text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></p>
+      </div>
+
+      <!-- Khung Tạo sự kiện mới -->
+      <div class="bg-white rounded-2xl border border-[#E5E2DC] shadow-xs overflow-hidden">
+        <!-- Bước 1: Tên sự kiện -->
+        <div class="p-5 sm:p-6 border-b border-[#E5E2DC] bg-[#FAF9F6]/50">
+          <label for="input-event-title" class="block text-sm font-semibold text-slate-800 mb-2">
+            Tên sự kiện <span class="text-rose-500">*</span>
+          </label>
+          <input
+            id="input-event-title"
+            type="text"
+            maxlength="80"
+            placeholder="Ví dụ: Họp nhóm cuối tuần, Cafe lên ý tưởng dự án..."
+            class="w-full px-4 py-3 rounded-xl bg-white border border-[#E5E2DC] text-slate-900 placeholder:text-slate-400 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all"
+          />
+          <p id="create-error-msg" class="hidden mt-2 text-xs font-medium text-rose-600"></p>
+        </div>
+
+        <!-- Bước 2 & 3: Lịch chọn ngày + Cấu hình khung giờ -->
+        <div class="grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-[#E5E2DC]">
+          
+          <!-- Cột trái 7 phần: Lịch tháng chọn nhiều ngày -->
+          <div class="md:col-span-7 p-5 sm:p-6 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-sm font-semibold text-slate-800">Chọn các ngày khảo sát</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Bấm từng ngày hoặc nhấn giữ & kéo để chọn nhiều ngày</p>
+              </div>
+              <button id="btn-cal-today" type="button" class="px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/70 transition-colors cursor-pointer">
+                Hôm nay
+              </button>
+            </div>
+
+            <!-- Điều hướng tháng -->
+            <div class="flex items-center justify-between bg-[#FAF9F6] px-3 py-2 rounded-xl border border-[#E5E2DC]">
+              <button id="btn-prev-month" type="button" aria-label="Tháng trước" class="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+              <span id="calendar-month-label" class="text-sm font-semibold text-slate-800 capitalize">
+                Tháng 11, 2026
+              </span>
+              <button id="btn-next-month" type="button" aria-label="Tháng sau" class="p-1.5 rounded-lg hover:bg-white text-slate-600 hover:text-slate-900 transition-colors cursor-pointer">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            </div>
+
+            <!-- Tiêu đề các thứ trong tuần (Thứ 2 đầu tuần) -->
+            <div class="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-slate-500 pt-1">
+              <div>T2</div>
+              <div>T3</div>
+              <div>T4</div>
+              <div>T5</div>
+              <div>T6</div>
+              <div class="text-emerald-700">T7</div>
+              <div class="text-rose-600">CN</div>
+            </div>
+
+            <!-- Lưới ngày trong tháng -->
+            <div id="calendar-grid" class="grid grid-cols-7 gap-1.5 no-select paint-grid">
+              <!-- Được tạo tự động bằng JS -->
+            </div>
+
+            <!-- Chân lịch chọn ngày -->
+            <div class="pt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span id="selected-dates-count" class="font-medium text-slate-700">
+                Đã chọn 0 ngày
+              </span>
+              <button id="btn-clear-dates" type="button" class="text-slate-500 hover:text-rose-600 underline underline-offset-2 transition-colors cursor-pointer">
+                Bỏ chọn tất cả
+              </button>
+            </div>
+          </div>
+
+          <!-- Cột phải 5 phần: Khung giờ & Nút tạo lịch -->
+          <div class="md:col-span-5 p-5 sm:p-6 flex flex-col justify-between space-y-6 bg-[#FAF9F6]/30">
+            <div class="space-y-4">
+              <h2 class="text-sm font-semibold text-slate-800">Khung giờ trong ngày</h2>
+
+              <!-- Giờ bắt đầu -->
+              <div>
+                <label for="select-start-hour" class="block text-xs font-medium text-slate-600 mb-1.5">
+                  Không sớm hơn
+                </label>
+                <select id="select-start-hour" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E5E2DC] text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500">
+                </select>
+              </div>
+
+              <!-- Giờ kết thúc -->
+              <div>
+                <label for="select-end-hour" class="block text-xs font-medium text-slate-600 mb-1.5">
+                  Không muộn hơn
+                </label>
+                <select id="select-end-hour" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E5E2DC] text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500">
+                </select>
+              </div>
+
+              <!-- Độ chia ô giờ -->
+              <div>
+                <span class="block text-xs font-medium text-slate-600 mb-1.5">
+                  Độ chia khung giờ
+                </span>
+                <div class="grid grid-cols-2 gap-2 p-1 rounded-xl bg-[#FAF9F6] border border-[#E5E2DC]">
+                  <button type="button" data-step="30" class="step-option-btn py-2 px-3 rounded-lg text-xs font-semibold bg-white text-emerald-700 shadow-2xs border border-[#E5E2DC] transition-all cursor-pointer">
+                    30 phút
+                  </button>
+                  <button type="button" data-step="60" class="step-option-btn py-2 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer">
+                    1 tiếng
+                  </button>
+                </div>
+              </div>
+
+              <!-- Tóm tắt cấu hình -->
+              <div class="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70 text-xs text-emerald-900 space-y-1">
+                <div class="font-semibold flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  <span>Tóm tắt bảng khảo sát</span>
+                </div>
+                <p id="create-summary-text" class="text-emerald-800/90 leading-relaxed">
+                  Vui lòng chọn ít nhất 1 ngày trên lịch.
+                </p>
+              </div>
+            </div>
+
+            <!-- Nút tạo lịch hẹn -->
+            <button id="btn-create-event" type="button" class="w-full py-3.5 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-semibold text-sm sm:text-base shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer">
+              <span>Tạo lịch hẹn</span>
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Danh sách các lịch hẹn gần đây -->
+      <div id="recent-events-section" class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-slate-800 flex items-center gap-2">
+            <span>Các lịch hẹn gần đây</span>
+            <span id="recent-events-count" class="px-2 py-0.5 rounded-full text-xs bg-white border border-[#E5E2DC] text-slate-600">0</span>
+          </h2>
+          <span class="text-xs text-slate-500">Bấm để mở lại bảng khảo sát</span>
+        </div>
+        <div id="recent-events-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================================== -->
+    <!-- MÀN HÌNH 2: BẢNG KHẢO SÁT THỜI GIAN & BẢN ĐỒ NHIỆT                    -->
+    <!-- ===================================================================== -->
+    <section id="event-view" class="hidden space-y-6">
+      
+      <!-- Tiêu đề sự kiện & Khu vực chia sẻ lời mời -->
+      <div class="bg-white rounded-2xl border border-[#E5E2DC] p-4 sm:p-6 shadow-2xs space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <!-- Thông tin sự kiện -->
+          <div class="space-y-1.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 id="event-display-title" class="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                Đang tải sự kiện...
+              </h1>
+              <span id="event-participant-badge" class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                0 người tham gia
+              </span>
+            </div>
+            <p id="event-display-meta" class="text-xs sm:text-sm text-slate-500">
+            </p>
+          </div>
+
+          <!-- Khung Chia sẻ & Mời bạn bè -->
+          <div class="bg-[#FAF9F6] rounded-xl border border-[#E5E2DC] p-3 sm:p-3.5 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div class="flex items-center justify-between sm:justify-start gap-2.5 pr-1">
+              <div>
+                <span class="block text-[11px] font-semibold uppercase tracking-wider text-slate-400">Chia sẻ & Mời bạn bè</span>
+                <div class="flex items-center gap-1.5 mt-0.5">
+                  <span class="text-xs text-slate-600">Mã sự kiện:</span>
+                  <span id="banner-event-code" class="font-mono font-bold text-base tracking-widest text-emerald-700 bg-white px-2.5 py-0.5 rounded-lg border border-emerald-200">
+                    ------
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="btn-copy-code-banner" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition-all active:scale-[0.98] cursor-pointer">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Sao chép mã</span>
+              </button>
+
+              <button id="btn-copy-link-banner" type="button" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs sm:text-sm font-medium bg-white hover:bg-emerald-50 text-slate-800 hover:text-emerald-800 border border-[#E5E2DC] hover:border-emerald-300 transition-all active:scale-[0.98] cursor-pointer">
+                <svg class="w-4 h-4 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                </svg>
+                <span>Sao chép link mời</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cảnh báo thông minh khi đang chạy ở môi trường xem trước / tệp nội bộ -->
+        <div id="preview-share-notice" class="hidden rounded-xl bg-amber-50/90 border border-amber-200/90 px-3.5 py-2.5 text-xs text-amber-900 flex items-start gap-2.5">
+          <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <div class="leading-relaxed">
+            <strong>Lưu ý môi trường xem trước / tệp nội bộ:</strong> Đường dẫn trình duyệt hiện tại không thể mở trực tiếp từ máy người khác (sẽ báo <code class="font-mono bg-amber-100 px-1 rounded">ERR_FILE_NOT_FOUND</code>). Hãy gửi <strong>Mã sự kiện</strong> cho bạn bè dán vào mục <em>"Tham gia sự kiện có sẵn"</em> ở trang chủ, hoặc tải tệp HTML lên <strong>GitHub Pages</strong> để dùng link mời trực tiếp.
+          </div>
+        </div>
+      </div>
+
+      <!-- Thanh chuyển tab trên điện thoại -->
+      <div class="lg:hidden grid grid-cols-2 gap-1.5 p-1.5 rounded-2xl bg-white border border-[#E5E2DC] shadow-2xs">
+        <button id="mobile-tab-mine" type="button" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer">
+          Thời gian của bạn
+        </button>
+        <button id="mobile-tab-group" type="button" class="py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer">
+          Lịch cả nhóm
+        </button>
+      </div>
+
+      <!-- Không gian làm việc hai cột -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        <!-- =============================================================== -->
+        <!-- CỘT TRÁI: THỜI GIAN RẢNH CỦA BẠN                                -->
+        <!-- =============================================================== -->
+        <div id="panel-your-availability" class="lg:col-span-6 bg-white rounded-2xl border border-[#E5E2DC] shadow-2xs overflow-hidden">
+          <div class="p-4 sm:p-5 border-b border-[#E5E2DC] flex flex-wrap items-center justify-between gap-2 bg-[#FAF9F6]/60">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">Thời gian rảnh của bạn</h2>
+              <p id="your-panel-subtitle" class="text-xs text-slate-500 mt-0.5">
+                Đăng nhập nhanh bằng tên để đánh dấu lịch rảnh
+              </p>
+            </div>
+            <!-- Huy hiệu tự động lưu -->
+            <div id="your-save-status" class="hidden items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/80">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span>Đã lưu tự động</span>
+            </div>
+          </div>
+
+          <!-- TRẠNG THÁI A: Biểu mẫu đăng nhập nhanh -->
+          <div id="signin-container" class="p-5 sm:p-7">
+            <div class="max-w-sm mx-auto space-y-4">
+              <div class="w-11 h-11 rounded-2xl bg-emerald-50 border border-emerald-200/80 text-emerald-700 flex items-center justify-center mx-auto">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              </div>
+
+              <div class="text-center space-y-1">
+                <h3 class="text-base font-semibold text-slate-900">Tham gia khảo sát</h3>
+                <p class="text-xs text-slate-500">
+                  Không cần tạo tài khoản. Nếu đã nhập tên trước đó, hãy nhập lại tên (và mã PIN nếu có) để sửa lịch.
+                </p>
+              </div>
+
+              <form id="signin-form" class="space-y-3.5">
+                <div>
+                  <label for="input-participant-name" class="block text-xs font-semibold text-slate-700 mb-1">
+                    Nhập tên của bạn <span class="text-rose-500">*</span>
+                  </label>
+                  <input
+                    id="input-participant-name"
+                    type="text"
+                    maxlength="40"
+                    placeholder="Ví dụ: Minh Anh"
+                    class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E5E2DC] text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label for="input-participant-pin" class="block text-xs font-semibold text-slate-700 mb-1">
+                    Mã PIN tùy chọn để sửa lại sau
+                  </label>
+                  <input
+                    id="input-participant-pin"
+                    type="password"
+                    inputmode="numeric"
+                    pattern="[0-9]*"
+                    maxlength="4"
+                    placeholder="4 chữ số (không bắt buộc)"
+                    class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-[#E5E2DC] text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500"
+                  />
+                </div>
+
+                <p id="signin-error-msg" class="hidden text-xs font-medium text-rose-600 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2"></p>
+
+                <button type="submit" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow-2xs transition-all cursor-pointer">
+                  Bắt đầu chọn giờ
+                </button>
+              </form>
+            </div>
+          </div>
+
+          <!-- TRẠNG THÁI B: Lưới chọn giờ tương tác của cá nhân -->
+          <div id="my-grid-container" class="hidden p-4 sm:p-5 space-y-4">
+            <!-- Thanh người dùng & Thao tác nhanh -->
+            <div class="flex flex-wrap items-center justify-between gap-2 pb-1">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-600 text-white text-xs font-bold" id="my-avatar-initial">
+                  M
+                </span>
+                <div>
+                  <div class="text-xs sm:text-sm font-semibold text-slate-900" id="my-signed-in-name">Minh Anh</div>
+                  <button id="btn-signout-participant" type="button" class="text-[11px] text-slate-500 hover:text-emerald-700 underline underline-offset-2 cursor-pointer">
+                    Đổi người khác
+                  </button>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5">
+                <button id="btn-select-all-slots" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#FAF9F6] hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border border-[#E5E2DC] transition-colors cursor-pointer">
+                  Chọn hết
+                </button>
+                <button id="btn-clear-all-slots" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-[#FAF9F6] hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-[#E5E2DC] transition-colors cursor-pointer">
+                  Xóa hết
+                </button>
+              </div>
+            </div>
+
+            <!-- Chú thích màu -->
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-[#FAF9F6] px-3 py-2 rounded-xl border border-[#E5E2DC]">
+              <div class="flex items-center gap-3">
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-3.5 h-3.5 rounded-xs bg-emerald-500 border border-emerald-600 inline-block"></span>
+                  <span>Rảnh</span>
+                </span>
+                <span class="inline-flex items-center gap-1.5">
+                  <span class="w-3.5 h-3.5 rounded-xs bg-white border border-slate-300 inline-block"></span>
+                  <span>Chưa rảnh</span>
+                </span>
+              </div>
+              <span class="text-[11px] text-slate-500">Nhấn giữ & kéo để tô vùng giờ</span>
+            </div>
+
+            <!-- Bảng lưới cá nhân -->
+            <div class="overflow-x-auto grid-scroll border border-[#E5E2DC] rounded-xl bg-white">
+              <div id="my-availability-grid" class="min-w-full inline-block no-select paint-grid">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- =============================================================== -->
+        <!-- CỘT PHẢI: BẢN ĐỒ NHIỆT THỜI GIAN RẢNH CỦA CẢ NHÓM               -->
+        <!-- =============================================================== -->
+        <div id="panel-group-availability" class="hidden lg:block lg:col-span-6 bg-white rounded-2xl border border-[#E5E2DC] shadow-2xs overflow-hidden">
+          <div class="p-4 sm:p-5 border-b border-[#E5E2DC] flex flex-wrap items-center justify-between gap-2 bg-[#FAF9F6]/60">
+            <div>
+              <h2 class="text-base font-bold text-slate-900">Thời gian rảnh của cả nhóm</h2>
+              <p class="text-xs text-slate-500 mt-0.5">
+                Di chuột hoặc chạm vào từng ô giờ để xem ai có thể tham gia
+              </p>
+            </div>
+            <!-- Huy hiệu đang lọc theo 1 thành viên -->
+            <div id="filter-active-badge" class="hidden items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
+              <span id="filter-active-label">Đang lọc: ...</span>
+              <button id="btn-clear-filter" type="button" class="hover:text-rose-600 font-bold ml-0.5 cursor-pointer" title="Bỏ lọc">&times;</button>
+            </div>
+          </div>
+
+          <div class="p-4 sm:p-5 space-y-4">
+            <!-- Thang màu độ rảnh -->
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 bg-[#FAF9F6] px-3 py-2 rounded-xl border border-[#E5E2DC]">
+              <span id="heatmap-legend-min" class="font-medium text-slate-500">0/0 rảnh</span>
+              <div class="flex items-center gap-1">
+                <span class="w-5 h-3.5 rounded-xs bg-white border border-slate-300" title="0%"></span>
+                <span class="w-5 h-3.5 rounded-xs bg-emerald-100 border border-emerald-200" title="25%"></span>
+                <span class="w-5 h-3.5 rounded-xs bg-emerald-300 border border-emerald-400" title="50%"></span>
+                <span class="w-5 h-3.5 rounded-xs bg-emerald-500 border border-emerald-600" title="75%"></span>
+                <span class="w-5 h-3.5 rounded-xs bg-emerald-700 border border-emerald-800" title="100%"></span>
+              </div>
+              <span id="heatmap-legend-max" class="font-semibold text-emerald-800">0/0 rảnh</span>
+            </div>
+
+            <!-- Bảng bản đồ nhiệt cả nhóm -->
+            <div class="overflow-x-auto grid-scroll border border-[#E5E2DC] rounded-xl bg-white">
+              <div id="group-heatmap-grid" class="min-w-full inline-block no-select">
+              </div>
+            </div>
+
+            <!-- Bảng chi tiết khung giờ khi di chuột / chạm -->
+            <div id="slot-inspector-card" class="rounded-xl border border-[#E5E2DC] bg-[#FAF9F6] p-4 space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#E5E2DC] pb-2.5">
+                <div>
+                  <span class="text-[11px] uppercase tracking-wider font-semibold text-slate-400 block">Chi tiết khung giờ</span>
+                  <h3 id="inspector-slot-title" class="text-sm font-bold text-slate-900">
+                    Chưa có dữ liệu
+                  </h3>
+                </div>
+                <span id="inspector-fraction-badge" class="px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  0/0 người rảnh
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <!-- Danh sách người rảnh -->
+                <div class="space-y-1.5">
+                  <div class="font-semibold text-emerald-800 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>Có thể tham gia</span>
+                  </div>
+                  <div id="inspector-available-list" class="flex flex-wrap gap-1.5">
+                    <span class="text-slate-400 italic">Chưa có ai</span>
+                  </div>
+                </div>
+
+                <!-- Danh sách người chưa rảnh -->
+                <div class="space-y-1.5">
+                  <div class="font-semibold text-slate-500 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-slate-300"></span>
+                    <span>Chưa rảnh</span>
+                  </div>
+                  <div id="inspector-unavailable-list" class="flex flex-wrap gap-1.5">
+                    <span class="text-slate-400 italic">Không có</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Danh sách thành viên & Bộ lọc -->
+            <div class="space-y-2 pt-1">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-semibold text-slate-700">Thành viên đã tham gia</span>
+                <span class="text-slate-400">Bấm vào tên để lọc lịch riêng</span>
+              </div>
+              <div id="participants-filter-list" class="flex flex-wrap gap-1.5">
+                <span class="text-xs text-slate-400 italic">Chưa có thành viên nào nhập lịch.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =================================================================== -->
+      <!-- TỔNG HỢP KHUNG GIỜ LÝ TƯỞNG NHẤT                                    -->
+      <!-- =================================================================== -->
+      <div class="bg-white rounded-2xl border border-[#E5E2DC] p-5 sm:p-6 shadow-2xs space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+            </div>
+            <div>
+              <h2 class="text-base font-bold text-slate-900">Khung giờ lý tưởng nhất</h2>
+              <p class="text-xs text-slate-500">Tự động tổng hợp các khoảng thời gian liên tục có nhiều người rảnh nhất</p>
+            </div>
+          </div>
+        </div>
+
+        <div id="best-times-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Chân trang tối giản -->
+  <footer class="border-t border-[#E5E2DC] py-5 px-4 text-center text-xs text-slate-400">
+    When2meet — Công cụ tìm lịch hẹn nhóm tối giản, đồng bộ thời gian thực.
+  </footer>
+
+  <!-- Thông báo nổi (Toast) -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 pointer-events-none opacity-0 translate-y-2 transition-all duration-200">
+    <div class="bg-slate-900 text-white text-xs sm:text-sm font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-2.5">
+      <svg class="w-4 h-4 text-emerald-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      <span id="toast-message">Đã sao chép liên kết mời!</span>
+    </div>
+  </div>
+
+  <!-- ======================================================================= -->
+  <!-- LOGIC ỨNG DỤNG & ĐỒNG BỘ DỮ LIỆU THỜI GIAN THỰC                         -->
+  <!-- ======================================================================= -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // =========================================================================
+    // [CẤU HÌNH CHO GITHUB PAGES] DÁN MÃ CẤU HÌNH FIREBASE CỦA BẠN VÀO ĐÂY
+    // Thay chữ null bên dưới bằng đối tượng cấu hình { apiKey: "...", ... }
+    // =========================================================================
+    const CUSTOM_FIREBASE_CONFIG = null;
+
+    // =========================================================================
+    // 1. KHỞI TẠO KẾT NỐI ĐÁM MÂY & BỘ NHỚ DỰ PHÒNG AN TOÀN
+    // =========================================================================
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'when2meet-github';
+    let firebaseConfig = CUSTOM_FIREBASE_CONFIG;
+
+    try {
+      if (!firebaseConfig && typeof __firebase_config !== 'undefined' && __firebase_config) {
+        firebaseConfig = typeof __firebase_config === 'string'
+          ? JSON.parse(__firebase_config)
+          : __firebase_config;
+      } else if (typeof firebaseConfig === 'string') {
+        firebaseConfig = JSON.parse(firebaseConfig);
+      }
+    } catch (e) {
+      console.error("Lỗi đọc cấu hình Firebase:", e);
+      firebaseConfig = null;
+    }
+
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+    let useCloudBackend = false;
+
+    // Bộ nhớ dự phòng cục bộ (hoạt động cả khi chưa cấu hình Firebase)
+    const memoryEvents = new Map();
+    const memoryResponses = new Map();
+    const LOCAL_EVENTS_KEY = 'w2m_local_events_v1';
+    const LOCAL_RESPONSES_KEY = 'w2m_local_responses_v1';
+
+    function loadLocalFallback() {
+      try {
+        const rawEvents = localStorage.getItem(LOCAL_EVENTS_KEY);
+        if (rawEvents) {
+          const parsedEvents = JSON.parse(rawEvents);
+          if (Array.isArray(parsedEvents)) {
+            parsedEvents.forEach((ev) => {
+              if (ev && ev.id) memoryEvents.set(ev.id, ev);
+            });
+          }
+        }
+        const rawResponses = localStorage.getItem(LOCAL_RESPONSES_KEY);
+        if (rawResponses) {
+          const parsedResponses = JSON.parse(rawResponses);
+          if (Array.isArray(parsedResponses)) {
+            parsedResponses.forEach((resp) => {
+              if (resp && resp.id) memoryResponses.set(resp.id, resp);
+            });
+          }
+        }
+      } catch (e) {
+        // Bỏ qua nếu môi trường chặn localStorage
+      }
+    }
+
+    function saveLocalFallback() {
+      try {
+        localStorage.setItem(LOCAL_EVENTS_KEY, JSON.stringify(Array.from(memoryEvents.values())));
+        localStorage.setItem(LOCAL_RESPONSES_KEY, JSON.stringify(Array.from(memoryResponses.values())));
+      } catch (e) {
+        // Bỏ qua nếu môi trường chặn localStorage
+      }
+    }
+
+    // =========================================================================
+    // 2. TRẠNG THÁI ỨNG DỤNG TẬP TRUNG
+    // =========================================================================
+    const now = new Date();
+    const state = {
+      allEvents: [],
+      allResponses: [],
+      initialSyncDone: false,
+
+      currentEventId: null,
+      currentParticipant: null,
+      mySelectedSlots: new Set(),
+      filterParticipantId: null,
+      inspectedSlotKey: null,
+      mobileTab: 'mine',
+
+      // Trạng thái màn hình tạo sự kiện
+      calYear: now.getFullYear(),
+      calMonth: now.getMonth(),
+      selectedDates: new Set(),
+      stepMinutes: 30,
+
+      // Trạng thái thao tác kéo thả
+      isCalDragging: false,
+      calDragMode: null,
+      isSlotDragging: false,
+      slotDragMode: null,
+      slotDragStart: null,
+      slotDragCurrent: null,
+      slotDragBaseSet: null
+    };
+
+    // =========================================================================
+    // 3. CÁC HÀM TIỆN ÍCH NGÀY GIỜ, MÃ SỰ KIỆN & SAO CHÉP
+    // =========================================================================
+    const WEEKDAY_SHORT_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const MONTH_NAMES_VI = [
+      'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
+      'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
+    ];
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function pad2(num) {
+      return String(num).padStart(2, '0');
+    }
+
+    function toDateKey(year, monthZeroIndexed, day) {
+      return `${year}-${pad2(monthZeroIndexed + 1)}-${pad2(day)}`;
+    }
+
+    function parseDateKey(dateKey) {
+      const [y, m, d] = dateKey.split('-').map(Number);
+      return new Date(y, m - 1, d);
+    }
+
+    function formatDateHeader(dateKey) {
+      const dateObj = parseDateKey(dateKey);
+      const weekday = WEEKDAY_SHORT_VI[dateObj.getDay()];
+      const dayMonth = `${pad2(dateObj.getDate())}/${pad2(dateObj.getMonth() + 1)}`;
+      return {
+        weekday,
+        dayMonth,
+        fullLabel: `${weekday}, ${dayMonth}/${dateObj.getFullYear()}`
+      };
+    }
+
+    function formatMinutesToTime(totalMinutes) {
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      return `${pad2(h)}:${pad2(m)}`;
+    }
+
+    function generateEventCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    }
+
+    function extractEventCode(rawInput) {
+      const cleaned = (rawInput || '').trim();
+      if (!cleaned) return '';
+
+      // Nếu người dùng dán cả URL hoặc chuỗi chứa #event= hoặc ?event=
+      const hashMatch = cleaned.match(/[#?&]event=([A-Za-z0-9_-]+)/i);
+      if (hashMatch && hashMatch[1]) {
+        return hashMatch[1].toUpperCase();
+      }
+
+      // Nếu chỉ nhập mã trực tiếp
+      return cleaned.replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+    }
+
+    function isRestrictedPreviewEnv() {
+      try {
+        const proto = window.location.protocol;
+        const href = window.location.href || '';
+        return proto === 'about:' || proto === 'file:' || href.startsWith('about:srcdoc');
+      } catch (e) {
+        return true;
+      }
+    }
+
+    function getInviteUrl(eventId) {
+      try {
+        const baseUrl = window.location.href.split('#')[0].split('?')[0];
+        return `${baseUrl}#event=${encodeURIComponent(eventId)}`;
+      } catch (e) {
+        return `#event=${encodeURIComponent(eventId)}`;
+      }
+    }
+
+    let toastTimer = null;
+    function showToast(message) {
+      const toastEl = document.getElementById('toast');
+      const msgEl = document.getElementById('toast-message');
+      if (!toastEl || !msgEl) return;
+
+      msgEl.textContent = message;
+      toastEl.classList.remove('opacity-0', 'translate-y-2');
+      toastEl.classList.add('opacity-100', 'translate-y-0');
+
+      if (toastTimer) clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toastEl.classList.remove('opacity-100', 'translate-y-0');
+        toastEl.classList.add('opacity-0', 'translate-y-2');
+      }, 2800);
+    }
+
+    function copyTextToClipboard(text, successMessage) {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+
+        if (ok) {
+          showToast(successMessage);
+          return;
+        }
+      } catch (e) {
+        // Thử sang API clipboard hiện đại bên dưới
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text)
+          .then(() => showToast(successMessage))
+          .catch(() => showToast('Không thể sao chép tự động, vui lòng bôi đen để chép.'));
+      } else {
+        showToast('Không thể sao chép tự động, vui lòng bôi đen để chép.');
+      }
+    }
+
+    // =========================================================================
+    // 4. ĐỒNG BỘ DỮ LIỆU FIRESTORE & DỰ PHÒNG
+    // =========================================================================
+    function syncFromMemory() {
+      state.allEvents = Array.from(memoryEvents.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+      state.allResponses = Array.from(memoryResponses.values());
+      state.initialSyncDone = true;
+    }
+
+    async function initDataLayer() {
+      const syncIndicator = document.getElementById('sync-indicator');
+      const syncDot = document.getElementById('sync-dot');
+      const syncText = document.getElementById('sync-text');
+
+      loadLocalFallback();
+      syncFromMemory();
+
+      if (firebaseConfig && firebaseConfig.apiKey) {
+        try {
+          const app = initializeApp(firebaseConfig);
+          auth = getAuth(app);
+          db = getFirestore(app);
+
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            await signInWithCustomToken(auth, __initial_auth_token);
+          } else {
+            await signInAnonymously(auth);
+          }
+
+          currentUser = auth.currentUser;
+          useCloudBackend = true;
+          state.initialSyncDone = false;
+
+          if (syncIndicator && syncDot && syncText) {
+            syncIndicator.classList.remove('hidden');
+            syncDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+            syncText.textContent = 'Đã đồng bộ trực tiếp';
+          }
+
+          subscribeToCloudData();
+          return;
+        } catch (err) {
+          console.error("Không thể kết nối Firebase, chuyển sang chế độ cục bộ:", err);
+        }
+      }
+
+      // Chế độ lưu cục bộ trên trình duyệt
+      useCloudBackend = false;
+      state.initialSyncDone = true;
+      if (syncIndicator && syncDot && syncText) {
+        syncIndicator.classList.remove('hidden');
+        syncDot.className = 'w-2 h-2 rounded-full bg-slate-400';
+        syncText.textContent = 'Chế độ cục bộ';
+      }
+      renderRecentEvents();
+      if (state.currentEventId) {
+        renderActiveEventView();
+      }
+    }
+
+    function subscribeToCloudData() {
+      if (!db) return;
+      const syncDot = document.getElementById('sync-dot');
+      const syncText = document.getElementById('sync-text');
+
+      const eventsCol = collection(db, 'artifacts', appId, 'public', 'data', 'events');
+      const responsesCol = collection(db, 'artifacts', appId, 'public', 'data', 'responses');
+
+      onSnapshot(
+        eventsCol,
+        (snapshot) => {
+          const items = [];
+          snapshot.forEach((docSnap) => {
+            items.push({ id: docSnap.id, ...docSnap.data() });
+          });
+          items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          state.allEvents = items;
+          state.initialSyncDone = true;
+          renderRecentEvents();
+          if (state.currentEventId) {
+            renderActiveEventView();
+          }
+        },
+        (error) => {
+          console.error("Lỗi đồng bộ danh sách sự kiện:", error);
+          state.initialSyncDone = true;
+          if (syncDot && syncText) {
+            syncDot.className = 'w-2 h-2 rounded-full bg-rose-500';
+            syncText.textContent = 'Lỗi đồng bộ';
+          }
+        }
+      );
+
+      onSnapshot(
+        responsesCol,
+        (snapshot) => {
+          const items = [];
+          snapshot.forEach((docSnap) => {
+            items.push({ id: docSnap.id, ...docSnap.data() });
+          });
+          state.allResponses = items;
+          renderRecentEvents();
+          if (state.currentEventId) {
+            renderActiveEventView();
+          }
+        },
+        (error) => {
+          console.error("Lỗi đồng bộ phản hồi:", error);
+        }
+      );
+    }
+
+    async function persistEvent(eventObj) {
+      memoryEvents.set(eventObj.id, eventObj);
+      saveLocalFallback();
+
+      if (useCloudBackend && db) {
+        const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', eventObj.id);
+        await setDoc(eventRef, eventObj);
+      } else {
+        syncFromMemory();
+        renderRecentEvents();
+      }
+    }
+
+    async function persistParticipantResponse(responseObj) {
+      memoryResponses.set(responseObj.id, responseObj);
+      saveLocalFallback();
+
+      if (useCloudBackend && db) {
+        const respRef = doc(db, 'artifacts', appId, 'public', 'data', 'responses', responseObj.id);
+        await setDoc(respRef, responseObj);
+      } else {
+        syncFromMemory();
+        renderActiveEventView();
+      }
+    }
+
+    function getActiveEvent() {
+      if (!state.currentEventId) return null;
+      return state.allEvents.find((ev) => ev.id.toUpperCase() === state.currentEventId.toUpperCase()) || null;
+    }
+
+    function getEventResponses(eventId) {
+      if (!eventId) return [];
+      return state.allResponses
+        .filter((r) => r.eventId && r.eventId.toUpperCase() === eventId.toUpperCase())
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+    }
+
+    // =========================================================================
+    // 5. ĐIỀU HƯỚNG GIỮA TRANG CHỦ & TRANG SỰ KIỆN (AN TOÀN TUYỆT ĐỐI)
+    // =========================================================================
+    function getEventIdFromLocation() {
+      try {
+        const hash = window.location.hash || '';
+        const hashMatch = hash.match(/event=([A-Za-z0-9_-]+)/i);
+        if (hashMatch && hashMatch[1]) {
+          return decodeURIComponent(hashMatch[1]).toUpperCase();
+        }
+        const search = window.location.search || '';
+        const searchMatch = search.match(/[?&]event=([A-Za-z0-9_-]+)/i);
+        if (searchMatch && searchMatch[1]) {
+          return decodeURIComponent(searchMatch[1]).toUpperCase();
+        }
+      } catch (e) {
+        // Bỏ qua
+      }
+      return null;
+    }
+
+    function safeUpdateHash(newHash) {
+      try {
+        if (window.location.hash !== newHash) {
+          window.location.hash = newHash;
+        }
+      } catch (e) {
+        // Bỏ qua trong môi trường sandbox hạn chế hash
+      }
+    }
+
+    function navigateToEvent(eventId) {
+      const normalizedId = extractEventCode(eventId);
+      if (!normalizedId) return;
+
+      state.currentEventId = normalizedId;
+      state.currentParticipant = null;
+      state.mySelectedSlots = new Set();
+      state.filterParticipantId = null;
+      state.inspectedSlotKey = null;
+      state.mobileTab = 'mine';
+
+      safeUpdateHash(`#event=${encodeURIComponent(normalizedId)}`);
+      showScreen('event');
+      renderActiveEventView();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function navigateToHome() {
+      state.currentEventId = null;
+      state.currentParticipant = null;
+      state.mySelectedSlots = new Set();
+      state.filterParticipantId = null;
+      state.inspectedSlotKey = null;
+
+      safeUpdateHash('');
+      showScreen('create');
+      renderRecentEvents();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function handleRouteChange() {
+      const urlEventId = getEventIdFromLocation();
+      if (urlEventId) {
+        if (state.currentEventId !== urlEventId) {
+          state.currentEventId = urlEventId;
+          state.currentParticipant = null;
+          state.mySelectedSlots = new Set();
+          state.filterParticipantId = null;
+          state.inspectedSlotKey = null;
+        }
+        showScreen('event');
+        renderActiveEventView();
+      } else {
+        state.currentEventId = null;
+        showScreen('create');
+        renderRecentEvents();
+      }
+    }
+
+    function showScreen(screenName) {
+      const createView = document.getElementById('create-view');
+      const eventView = document.getElementById('event-view');
+      const headerEventActions = document.getElementById('header-event-actions');
+
+      if (screenName === 'event') {
+        createView.classList.add('hidden');
+        eventView.classList.remove('hidden');
+        headerEventActions.classList.remove('hidden');
+        headerEventActions.classList.add('flex');
+      } else {
+        eventView.classList.add('hidden');
+        createView.classList.remove('hidden');
+        headerEventActions.classList.add('hidden');
+        headerEventActions.classList.remove('flex');
+      }
+    }
+
+    // =========================================================================
+    // 6. MÀN HÌNH 1: LỊCH THÁNG & TẠO SỰ KIỆN MỚI
+    // =========================================================================
+    function initTimeSelects() {
+      const startSelect = document.getElementById('select-start-hour');
+      const endSelect = document.getElementById('select-end-hour');
+      if (!startSelect || !endSelect) return;
+
+      let startOptionsHtml = '';
+      for (let h = 0; h <= 23; h++) {
+        const selected = h === 8 ? 'selected' : '';
+        startOptionsHtml += `<option value="${h}" ${selected}>${pad2(h)}:00</option>`;
+      }
+      startSelect.innerHTML = startOptionsHtml;
+
+      let endOptionsHtml = '';
+      for (let h = 1; h <= 24; h++) {
+        const selected = h === 21 ? 'selected' : '';
+        const label = h === 24 ? '24:00 (Nửa đêm)' : `${pad2(h)}:00`;
+        endOptionsHtml += `<option value="${h}" ${selected}>${label}</option>`;
+      }
+      endSelect.innerHTML = endOptionsHtml;
+
+      startSelect.addEventListener('change', () => {
+        const s = Number(startSelect.value);
+        const e = Number(endSelect.value);
+        if (e <= s) {
+          endSelect.value = String(Math.min(24, s + 1));
+        }
+        updateCreateSummary();
+      });
+
+      endSelect.addEventListener('change', () => {
+        const s = Number(startSelect.value);
+        const e = Number(endSelect.value);
+        if (e <= s) {
+          startSelect.value = String(Math.max(0, e - 1));
+        }
+        updateCreateSummary();
+      });
+    }
+
+    function renderCalendar() {
+      const gridEl = document.getElementById('calendar-grid');
+      const labelEl = document.getElementById('calendar-month-label');
+      if (!gridEl || !labelEl) return;
+
+      labelEl.textContent = `${MONTH_NAMES_VI[state.calMonth]}, ${state.calYear}`;
+
+      const firstDayOfMonth = new Date(state.calYear, state.calMonth, 1);
+      // Quy đổi Chủ nhật (0) thành 6, Thứ 2 (1) thành 0
+      const startWeekday = (firstDayOfMonth.getDay() + 6) % 7;
+      const daysInMonth = new Date(state.calYear, state.calMonth + 1, 0).getDate();
+
+      const today = new Date();
+      const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+
+      let html = '';
+      for (let i = 0; i < startWeekday; i++) {
+        html += `<div class="h-10 sm:h-11 rounded-xl bg-transparent"></div>`;
+      }
+
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateKey = toDateKey(state.calYear, state.calMonth, day);
+        const isSelected = state.selectedDates.has(dateKey);
+        const isToday = dateKey === todayKey;
+
+        let classes = 'cal-day-btn h-10 sm:h-11 rounded-xl text-xs sm:text-sm font-semibold flex flex-col items-center justify-center transition-all cursor-pointer border ';
+        if (isSelected) {
+          classes += 'bg-emerald-600 text-white border-emerald-700 shadow-2xs scale-[1.02]';
+        } else if (isToday) {
+          classes += 'bg-emerald-50/70 text-emerald-900 border-emerald-300 hover:bg-emerald-100/70';
+        } else {
+          classes += 'bg-[#FAF9F6] text-slate-700 border-[#E5E2DC] hover:bg-emerald-50/60 hover:border-emerald-200';
+        }
+
+        html += `
+          <button type="button" data-date="${dateKey}" class="${classes}">
+            <span>${day}</span>
+            ${isToday ? `<span class="w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-600'} mt-0.5"></span>` : ''}
+          </button>
+        `;
+      }
+
+      gridEl.innerHTML = html;
+      updateCreateSummary();
+    }
+
+    function applyCalendarDateAction(dateKey, mode) {
+      if (!dateKey) return;
+      if (mode === 'add') {
+        state.selectedDates.add(dateKey);
+      } else {
+        state.selectedDates.delete(dateKey);
+      }
+      renderCalendar();
+    }
+
+    function updateCreateSummary() {
+      const countEl = document.getElementById('selected-dates-count');
+      const summaryEl = document.getElementById('create-summary-text');
+      const startHour = Number(document.getElementById('select-start-hour')?.value ?? 8);
+      const endHour = Number(document.getElementById('select-end-hour')?.value ?? 21);
+
+      const count = state.selectedDates.size;
+      if (countEl) {
+        countEl.textContent = `Đã chọn ${count} ngày`;
+      }
+
+      if (!summaryEl) return;
+      if (count === 0) {
+        summaryEl.textContent = 'Vui lòng chọn ít nhất 1 ngày trên lịch bên trái.';
+        return;
+      }
+
+      const sortedDates = Array.from(state.selectedDates).sort();
+      const firstInfo = formatDateHeader(sortedDates[0]);
+      const lastInfo = formatDateHeader(sortedDates[sortedDates.length - 1]);
+      const dateDesc = count === 1
+        ? `${firstInfo.fullLabel}`
+        : `${count} ngày (từ ${firstInfo.dayMonth} đến ${lastInfo.dayMonth})`;
+
+      summaryEl.textContent = `Khảo sát ${dateDesc}, khung giờ từ ${pad2(startHour)}:00 đến ${pad2(endHour)}:00 (mỗi ô ${state.stepMinutes} phút).`;
+    }
+
+    function renderRecentEvents() {
+      const listEl = document.getElementById('recent-events-list');
+      const countEl = document.getElementById('recent-events-count');
+      if (!listEl || !countEl) return;
+
+      countEl.textContent = String(state.allEvents.length);
+
+      if (state.allEvents.length === 0) {
+        listEl.innerHTML = `
+          <div class="col-span-full bg-white rounded-2xl border border-dashed border-[#E5E2DC] p-6 text-center text-xs sm:text-sm text-slate-400">
+            Chưa có lịch hẹn nào được tạo. Hãy tạo lịch hẹn đầu tiên của nhóm bạn ở phía trên!
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = state.allEvents.map((ev) => {
+        const responses = getEventResponses(ev.id);
+        const dates = Array.isArray(ev.dates) ? ev.dates : [];
+        const firstDate = dates.length > 0 ? formatDateHeader(dates[0]).dayMonth : '';
+        const lastDate = dates.length > 1 ? ` - ${formatDateHeader(dates[dates.length - 1]).dayMonth}` : '';
+
+        return `
+          <button type="button" data-open-event="${escapeHtml(ev.id)}" class="recent-event-card text-left bg-white hover:bg-emerald-50/40 rounded-2xl border border-[#E5E2DC] hover:border-emerald-300 p-4 shadow-2xs transition-all group cursor-pointer space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="font-bold text-sm text-slate-900 group-hover:text-emerald-800 line-clamp-1">
+                ${escapeHtml(ev.title)}
+              </h3>
+              <span class="shrink-0 font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#FAF9F6] border border-[#E5E2DC] text-emerald-700">
+                ${escapeHtml(ev.id)}
+              </span>
+            </div>
+            <div class="flex items-center justify-between text-xs text-slate-500">
+              <span>${dates.length} ngày (${firstDate}${lastDate})</span>
+              <span class="font-medium text-emerald-700">${responses.length} người</span>
+            </div>
+          </button>
+        `;
+      }).join('');
+
+      listEl.querySelectorAll('.recent-event-card').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const evId = btn.getAttribute('data-open-event');
+          if (evId) navigateToEvent(evId);
+        });
+      });
+    }
+
+    async function handleCreateEvent() {
+      const titleInput = document.getElementById('input-event-title');
+      const errorEl = document.getElementById('create-error-msg');
+      const startSelect = document.getElementById('select-start-hour');
+      const endSelect = document.getElementById('select-end-hour');
+
+      const title = (titleInput?.value || '').trim();
+      if (!title) {
+        errorEl.textContent = 'Vui lòng nhập tên sự kiện trước khi tạo.';
+        errorEl.classList.remove('hidden');
+        titleInput?.focus();
+        return;
+      }
+
+      if (state.selectedDates.size === 0) {
+        errorEl.textContent = 'Vui lòng chọn ít nhất 1 ngày trên lịch.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      const startHour = Number(startSelect?.value ?? 8);
+      const endHour = Number(endSelect?.value ?? 21);
+      if (endHour <= startHour) {
+        errorEl.textContent = 'Giờ kết thúc phải muộn hơn giờ bắt đầu.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      errorEl.classList.add('hidden');
+
+      // Tạo mã sự kiện 6 ký tự duy nhất
+      let newCode = generateEventCode();
+      const existingIds = new Set(state.allEvents.map((e) => e.id.toUpperCase()));
+      while (existingIds.has(newCode)) {
+        newCode = generateEventCode();
+      }
+
+      const sortedDates = Array.from(state.selectedDates).sort();
+      const newEvent = {
+        id: newCode,
+        title,
+        dates: sortedDates,
+        startHour,
+        endHour,
+        stepMinutes: state.stepMinutes,
+        createdAt: Date.now()
+      };
+
+      await persistEvent(newEvent);
+      if (titleInput) titleInput.value = '';
+      showToast(`Đã tạo lịch hẹn (Mã: ${newCode})`);
+      navigateToEvent(newCode);
+    }
+
+    // =========================================================================
+    // 7. MÀN HÌNH 2: BẢNG KHẢO SÁT CÁ NHÂN & BẢN ĐỒ NHIỆT NHÓM
+    // =========================================================================
+    function getEventSlotMinutes(event) {
+      const startMin = (event.startHour ?? 8) * 60;
+      const endMin = (event.endHour ?? 21) * 60;
+      const step = event.stepMinutes || 30;
+      const slots = [];
+      for (let m = startMin; m < endMin; m += step) {
+        slots.push(m);
+      }
+      return slots;
+    }
+
+    function makeSlotKey(dateKey, minuteOfDay) {
+      return `${dateKey}_${minuteOfDay}`;
+    }
+
+    function renderActiveEventView() {
+      const titleEl = document.getElementById('event-display-title');
+      const metaEl = document.getElementById('event-display-meta');
+      const badgeEl = document.getElementById('event-participant-badge');
+      const headerCodeEl = document.getElementById('header-event-code-text');
+      const bannerCodeEl = document.getElementById('banner-event-code');
+      const previewNoticeEl = document.getElementById('preview-share-notice');
+
+      const displayCode = state.currentEventId || '------';
+      if (headerCodeEl) headerCodeEl.textContent = displayCode;
+      if (bannerCodeEl) bannerCodeEl.textContent = displayCode;
+
+      if (previewNoticeEl) {
+        if (isRestrictedPreviewEnv()) {
+          previewNoticeEl.classList.remove('hidden');
+        } else {
+          previewNoticeEl.classList.add('hidden');
+        }
+      }
+
+      const event = getActiveEvent();
+      if (!event) {
+        if (useCloudBackend && !state.initialSyncDone) {
+          titleEl.textContent = `Đang tải sự kiện (${displayCode})...`;
+          metaEl.textContent = 'Đang đồng bộ dữ liệu lịch hẹn từ máy chủ, vui lòng chờ trong giây lát...';
+        } else {
+          titleEl.textContent = `Không tìm thấy sự kiện (${displayCode})`;
+          metaEl.textContent = 'Mã sự kiện không tồn tại hoặc đã bị xóa. Bạn có thể quay về trang chủ để kiểm tra lại mã.';
+        }
+        badgeEl.textContent = '0 người tham gia';
+        return;
+      }
+
+      const responses = getEventResponses(event.id);
+      const dates = Array.isArray(event.dates) ? event.dates : [];
+
+      titleEl.textContent = event.title;
+      badgeEl.textContent = `${responses.length} người tham gia`;
+
+      const firstDateStr = dates.length > 0 ? formatDateHeader(dates[0]).fullLabel : '';
+      const lastDateStr = dates.length > 1 ? ` → ${formatDateHeader(dates[dates.length - 1]).fullLabel}` : '';
+      metaEl.textContent = `${dates.length} ngày (${firstDateStr}${lastDateStr}) • Khung giờ ${pad2(event.startHour)}:00 – ${pad2(event.endHour)}:00 (${event.stepMinutes || 30} phút/ô)`;
+
+      // Cập nhật giao diện đăng nhập / lưới cá nhân
+      const signinContainer = document.getElementById('signin-container');
+      const myGridContainer = document.getElementById('my-grid-container');
+      const saveStatusEl = document.getElementById('your-save-status');
+      const subtitleEl = document.getElementById('your-panel-subtitle');
+
+      if (state.currentParticipant) {
+        // Đồng bộ lại slot của người dùng nếu có cập nhật từ cloud
+        const latestResp = responses.find((r) => r.id === state.currentParticipant.id);
+        if (latestResp && !state.isSlotDragging) {
+          state.mySelectedSlots = new Set(Array.isArray(latestResp.slots) ? latestResp.slots : []);
+        }
+
+        signinContainer.classList.add('hidden');
+        myGridContainer.classList.remove('hidden');
+        saveStatusEl.classList.remove('hidden');
+        saveStatusEl.classList.add('inline-flex');
+        subtitleEl.textContent = 'Bấm hoặc kéo thả để đánh dấu khung giờ bạn rảnh';
+
+        const nameEl = document.getElementById('my-signed-in-name');
+        const avatarEl = document.getElementById('my-avatar-initial');
+        if (nameEl) nameEl.textContent = state.currentParticipant.name;
+        if (avatarEl) avatarEl.textContent = state.currentParticipant.name.charAt(0).toUpperCase();
+
+        renderMyAvailabilityGrid(event);
+      } else {
+        signinContainer.classList.remove('hidden');
+        myGridContainer.classList.add('hidden');
+        saveStatusEl.classList.add('hidden');
+        saveStatusEl.classList.remove('inline-flex');
+        subtitleEl.textContent = 'Đăng nhập nhanh bằng tên để đánh dấu lịch rảnh';
+      }
+
+      renderGroupHeatmapGrid(event, responses);
+      renderParticipantsFilter(responses);
+      renderSlotInspector(event, responses);
+      renderBestTimes(event, responses);
+      updateMobileTabVisibility();
+    }
+
+    function updateMobileTabVisibility() {
+      const panelMine = document.getElementById('panel-your-availability');
+      const panelGroup = document.getElementById('panel-group-availability');
+      const tabMine = document.getElementById('mobile-tab-mine');
+      const tabGroup = document.getElementById('mobile-tab-group');
+
+      if (!panelMine || !panelGroup || !tabMine || !tabGroup) return;
+
+      if (state.mobileTab === 'mine') {
+        panelMine.classList.remove('hidden');
+        panelGroup.classList.add('hidden', 'lg:block');
+        tabMine.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer';
+        tabGroup.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+      } else {
+        panelMine.classList.add('hidden', 'lg:block');
+        panelGroup.classList.remove('hidden');
+        tabGroup.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer';
+        tabMine.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+      }
+    }
+
+    async function handleParticipantSignIn(e) {
+      e.preventDefault();
+      const event = getActiveEvent();
+      if (!event) {
+        showToast('Sự kiện chưa sẵn sàng hoặc không tồn tại.');
+        return;
+      }
+
+      const nameInput = document.getElementById('input-participant-name');
+      const pinInput = document.getElementById('input-participant-pin');
+      const errEl = document.getElementById('signin-error-msg');
+
+      const name = (nameInput?.value || '').trim();
+      const pin = (pinInput?.value || '').trim();
+
+      if (!name) {
+        errEl.textContent = 'Vui lòng nhập tên của bạn.';
+        errEl.classList.remove('hidden');
+        nameInput?.focus();
+        return;
+      }
+
+      if (pin && !/^\d{4}$/.test(pin)) {
+        errEl.textContent = 'Mã PIN phải gồm đúng 4 chữ số (hoặc để trống).';
+        errEl.classList.remove('hidden');
+        pinInput?.focus();
+        return;
+      }
+
+      const responses = getEventResponses(event.id);
+      const existing = responses.find((r) => r.name.toLowerCase() === name.toLowerCase());
+
+      if (existing) {
+        if (existing.pin && existing.pin !== pin) {
+          errEl.textContent = 'Tên này đã được bảo vệ bằng mã PIN. Vui lòng nhập đúng mã PIN 4 số hoặc dùng tên khác.';
+          errEl.classList.remove('hidden');
+          pinInput?.focus();
+          return;
+        }
+
+        errEl.classList.add('hidden');
+        state.currentParticipant = {
+          id: existing.id,
+          name: existing.name,
+          pin: existing.pin || ''
+        };
+        state.mySelectedSlots = new Set(Array.isArray(existing.slots) ? existing.slots : []);
+        renderActiveEventView();
+        showToast(`Chào mừng ${existing.name} quay lại!`);
+        return;
+      }
+
+      // Tạo người tham gia mới
+      errEl.classList.add('hidden');
+      const safeSlug = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'user';
+      const participantId = `${event.id}_${safeSlug}_${Date.now().toString(36)}`;
+
+      const newResponse = {
+        id: participantId,
+        eventId: event.id,
+        name,
+        pin: pin || '',
+        slots: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+
+      state.currentParticipant = { id: participantId, name, pin: pin || '' };
+      state.mySelectedSlots = new Set();
+
+      await persistParticipantResponse(newResponse);
+      renderActiveEventView();
+      showToast(`Đã tham gia với tên "${name}"`);
+    }
+
+    async function saveMyAvailabilitySlots() {
+      const event = getActiveEvent();
+      if (!event || !state.currentParticipant) return;
+
+      const responses = getEventResponses(event.id);
+      const existing = responses.find((r) => r.id === state.currentParticipant.id);
+
+      const updatedDoc = {
+        id: state.currentParticipant.id,
+        eventId: event.id,
+        name: state.currentParticipant.name,
+        pin: state.currentParticipant.pin || '',
+        slots: Array.from(state.mySelectedSlots),
+        createdAt: existing?.createdAt || Date.now(),
+        updatedAt: Date.now()
+      };
+
+      await persistParticipantResponse(updatedDoc);
+    }
+
+    // =========================================================================
+    // 8. LƯỚI CHỌN GIỜ CÁ NHÂN (HỖ TRỢ KÉO VÙNG CHỮ NHẬT CHUỘT & CẢM ỨNG)
+    // =========================================================================
+    function renderMyAvailabilityGrid(event) {
+      const container = document.getElementById('my-availability-grid');
+      if (!container) return;
+
+      const dates = event.dates || [];
+      const slotMinutes = getEventSlotMinutes(event);
+      const colMinWidth = dates.length > 5 ? '58px' : '1fr';
+
+      let html = `<div class="grid" style="grid-template-columns: 54px repeat(${dates.length}, minmax(${colMinWidth}, 1fr));">`;
+
+      // Góc trống trên cùng bên trái
+      html += `<div class="sticky left-0 z-10 bg-[#FAF9F6] border-b border-r border-[#E5E2DC] p-2"></div>`;
+
+      // Tiêu đề các ngày
+      dates.forEach((dateKey) => {
+        const info = formatDateHeader(dateKey);
+        html += `
+          <div class="bg-[#FAF9F6] border-b border-r last:border-r-0 border-[#E5E2DC] py-2 px-1 text-center">
+            <div class="text-[11px] font-bold text-slate-800">${info.weekday}</div>
+            <div class="text-[11px] text-slate-500">${info.dayMonth}</div>
+          </div>
+        `;
+      });
+
+      // Các dòng khung giờ
+      slotMinutes.forEach((minute, rIdx) => {
+        const isHourStart = minute % 60 === 0;
+        const borderClass = isHourStart ? 'slot-border-hour' : 'slot-border-half';
+        const timeLabel = isHourStart ? formatMinutesToTime(minute) : '';
+
+        html += `
+          <div class="sticky left-0 z-10 bg-white border-r border-[#E5E2DC] ${borderClass} pr-2 flex items-start justify-end text-[11px] font-medium text-slate-400 h-7">
+            <span class="-mt-2 bg-white px-0.5">${timeLabel}</span>
+          </div>
+        `;
+
+        dates.forEach((dateKey, cIdx) => {
+          const slotKey = makeSlotKey(dateKey, minute);
+          const isSelected = state.mySelectedSlots.has(slotKey);
+          const bgClass = isSelected
+            ? 'bg-emerald-500 hover:bg-emerald-600'
+            : 'bg-white hover:bg-emerald-50';
+
+          html += `
+            <div
+              data-slot-key="${slotKey}"
+              data-r="${rIdx}"
+              data-c="${cIdx}"
+              class="my-slot-cell slot-cell h-7 border-r last:border-r-0 border-[#E5E2DC] ${borderClass} ${bgClass} cursor-pointer"
+            ></div>
+          `;
+        });
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+    }
+
+    function computeRectPreviewSet(event) {
+      if (!state.slotDragStart || !state.slotDragCurrent || !state.slotDragBaseSet) {
+        return state.mySelectedSlots;
+      }
+      const nextSet = new Set(state.slotDragBaseSet);
+      const minR = Math.min(state.slotDragStart.r, state.slotDragCurrent.r);
+      const maxR = Math.max(state.slotDragStart.r, state.slotDragCurrent.r);
+      const minC = Math.min(state.slotDragStart.c, state.slotDragCurrent.c);
+      const maxC = Math.max(state.slotDragStart.c, state.slotDragCurrent.c);
+
+      const dates = event.dates || [];
+      const slotMinutes = getEventSlotMinutes(event);
+
+      for (let r = minR; r <= maxR; r++) {
+        for (let c = minC; c <= maxC; c++) {
+          const dateKey = dates[c];
+          const minute = slotMinutes[r];
+          if (dateKey !== undefined && minute !== undefined) {
+            const key = makeSlotKey(dateKey, minute);
+            if (state.slotDragMode === 'add') {
+              nextSet.add(key);
+            } else {
+              nextSet.delete(key);
+            }
+          }
+        }
+      }
+      return nextSet;
+    }
+
+    function applyVisualMySlots(previewSet) {
+      const container = document.getElementById('my-availability-grid');
+      if (!container) return;
+
+      container.querySelectorAll('.my-slot-cell').forEach((cell) => {
+        const key = cell.getAttribute('data-slot-key');
+        const active = previewSet.has(key);
+        if (active) {
+          cell.classList.remove('bg-white', 'hover:bg-emerald-50');
+          cell.classList.add('bg-emerald-500', 'hover:bg-emerald-600');
+        } else {
+          cell.classList.remove('bg-emerald-500', 'hover:bg-emerald-600');
+          cell.classList.add('bg-white', 'hover:bg-emerald-50');
+        }
+      });
+    }
+
+    // =========================================================================
+    // 9. BẢN ĐỒ NHIỆT CẢ NHÓM, CHI TIẾT KHUNG GIỜ & GIỜ LÝ TƯỞNG
+    // =========================================================================
+    function getHeatmapColorClass(count, total) {
+      if (total === 0 || count === 0) {
+        return 'bg-white hover:ring-1 hover:ring-slate-400';
+      }
+      const ratio = count / total;
+      if (ratio >= 1) {
+        return 'bg-emerald-700 hover:ring-2 hover:ring-slate-900';
+      }
+      if (ratio >= 0.75) {
+        return 'bg-emerald-500 hover:ring-2 hover:ring-slate-900';
+      }
+      if (ratio >= 0.5) {
+        return 'bg-emerald-300 hover:ring-2 hover:ring-slate-900';
+      }
+      return 'bg-emerald-100 hover:ring-2 hover:ring-slate-900';
+    }
+
+    function renderGroupHeatmapGrid(event, responses) {
+      const container = document.getElementById('group-heatmap-grid');
+      const minLegend = document.getElementById('heatmap-legend-min');
+      const maxLegend = document.getElementById('heatmap-legend-max');
+      if (!container) return;
+
+      const activeResponses = state.filterParticipantId
+        ? responses.filter((r) => r.id === state.filterParticipantId)
+        : responses;
+
+      const totalPeople = activeResponses.length;
+      if (minLegend) minLegend.textContent = `0/${totalPeople} rảnh`;
+      if (maxLegend) maxLegend.textContent = `${totalPeople}/${totalPeople} rảnh`;
+
+      // Đếm số người rảnh cho từng ô
+      const slotCounts = new Map();
+      activeResponses.forEach((resp) => {
+        const slots = Array.isArray(resp.slots) ? resp.slots : [];
+        slots.forEach((slotKey) => {
+          slotCounts.set(slotKey, (slotCounts.get(slotKey) || 0) + 1);
+        });
+      });
+
+      const dates = event.dates || [];
+      const slotMinutes = getEventSlotMinutes(event);
+      const colMinWidth = dates.length > 5 ? '58px' : '1fr';
+
+      // Tự động chọn ô có nhiều người rảnh nhất làm ô xem trước mặc định nếu chưa chọn
+      if (!state.inspectedSlotKey && dates.length > 0 && slotMinutes.length > 0) {
+        let bestKey = makeSlotKey(dates[0], slotMinutes[0]);
+        let bestCount = -1;
+        dates.forEach((d) => {
+          slotMinutes.forEach((m) => {
+            const k = makeSlotKey(d, m);
+            const c = slotCounts.get(k) || 0;
+            if (c > bestCount) {
+              bestCount = c;
+              bestKey = k;
+            }
+          });
+        });
+        state.inspectedSlotKey = bestKey;
+      }
+
+      let html = `<div class="grid" style="grid-template-columns: 54px repeat(${dates.length}, minmax(${colMinWidth}, 1fr));">`;
+      html += `<div class="sticky left-0 z-10 bg-[#FAF9F6] border-b border-r border-[#E5E2DC] p-2"></div>`;
+
+      dates.forEach((dateKey) => {
+        const info = formatDateHeader(dateKey);
+        html += `
+          <div class="bg-[#FAF9F6] border-b border-r last:border-r-0 border-[#E5E2DC] py-2 px-1 text-center">
+            <div class="text-[11px] font-bold text-slate-800">${info.weekday}</div>
+            <div class="text-[11px] text-slate-500">${info.dayMonth}</div>
+          </div>
+        `;
+      });
+
+      slotMinutes.forEach((minute) => {
+        const isHourStart = minute % 60 === 0;
+        const borderClass = isHourStart ? 'slot-border-hour' : 'slot-border-half';
+        const timeLabel = isHourStart ? formatMinutesToTime(minute) : '';
+
+        html += `
+          <div class="sticky left-0 z-10 bg-white border-r border-[#E5E2DC] ${borderClass} pr-2 flex items-start justify-end text-[11px] font-medium text-slate-400 h-7">
+            <span class="-mt-2 bg-white px-0.5">${timeLabel}</span>
+          </div>
+        `;
+
+        dates.forEach((dateKey) => {
+          const slotKey = makeSlotKey(dateKey, minute);
+          const count = slotCounts.get(slotKey) || 0;
+          const colorClass = getHeatmapColorClass(count, totalPeople);
+          const isInspected = state.inspectedSlotKey === slotKey;
+          const ringClass = isInspected ? 'ring-2 ring-slate-900 z-10' : '';
+
+          html += `
+            <div
+              data-heatmap-slot="${slotKey}"
+              class="heatmap-cell slot-cell h-7 border-r last:border-r-0 border-[#E5E2DC] ${borderClass} ${colorClass} ${ringClass} cursor-pointer"
+            ></div>
+          `;
+        });
+      });
+
+      html += `</div>`;
+      container.innerHTML = html;
+
+      container.querySelectorAll('.heatmap-cell').forEach((cell) => {
+        const inspectHandler = () => {
+          const slotKey = cell.getAttribute('data-heatmap-slot');
+          if (!slotKey || state.inspectedSlotKey === slotKey) return;
+          state.inspectedSlotKey = slotKey;
+
+          container.querySelectorAll('.heatmap-cell').forEach((c) => {
+            c.classList.remove('ring-2', 'ring-slate-900', 'z-10');
+          });
+          cell.classList.add('ring-2', 'ring-slate-900', 'z-10');
+          renderSlotInspector(event, responses);
+        };
+
+        cell.addEventListener('mouseenter', inspectHandler);
+        cell.addEventListener('click', inspectHandler);
+      });
+    }
+
+    function renderSlotInspector(event, responses) {
+      const titleEl = document.getElementById('inspector-slot-title');
+      const badgeEl = document.getElementById('inspector-fraction-badge');
+      const availEl = document.getElementById('inspector-available-list');
+      const unavailEl = document.getElementById('inspector-unavailable-list');
+      if (!titleEl || !badgeEl || !availEl || !unavailEl) return;
+
+      if (!state.inspectedSlotKey) {
+        titleEl.textContent = 'Chưa chọn khung giờ';
+        badgeEl.textContent = `0/${responses.length} người rảnh`;
+        return;
+      }
+
+      const [dateKey, minuteStr] = state.inspectedSlotKey.split('_');
+      const startMin = Number(minuteStr);
+      const step = event.stepMinutes || 30;
+      const dateInfo = formatDateHeader(dateKey);
+
+      titleEl.textContent = `${dateInfo.fullLabel} • ${formatMinutesToTime(startMin)} – ${formatMinutesToTime(startMin + step)}`;
+
+      const availablePeople = [];
+      const unavailablePeople = [];
+
+      responses.forEach((resp) => {
+        const slots = Array.isArray(resp.slots) ? resp.slots : [];
+        if (slots.includes(state.inspectedSlotKey)) {
+          availablePeople.push(resp.name);
+        } else {
+          unavailablePeople.push(resp.name);
+        }
+      });
+
+      badgeEl.textContent = `${availablePeople.length}/${responses.length} người rảnh`;
+
+      availEl.innerHTML = availablePeople.length > 0
+        ? availablePeople.map((n) => `<span class="px-2 py-0.5 rounded-md bg-emerald-100/90 text-emerald-900 font-medium border border-emerald-200">${escapeHtml(n)}</span>`).join('')
+        : `<span class="text-slate-400 italic">Chưa có ai</span>`;
+
+      unavailEl.innerHTML = unavailablePeople.length > 0
+        ? unavailablePeople.map((n) => `<span class="px-2 py-0.5 rounded-md bg-white text-slate-600 border border-[#E5E2DC]">${escapeHtml(n)}</span>`).join('')
+        : `<span class="text-slate-400 italic">Không có</span>`;
+    }
+
+    function renderParticipantsFilter(responses) {
+      const listEl = document.getElementById('participants-filter-list');
+      const activeBadge = document.getElementById('filter-active-badge');
+      const activeLabel = document.getElementById('filter-active-label');
+      if (!listEl) return;
+
+      if (state.filterParticipantId) {
+        const found = responses.find((r) => r.id === state.filterParticipantId);
+        if (found && activeBadge && activeLabel) {
+          activeBadge.classList.remove('hidden');
+          activeBadge.classList.add('inline-flex');
+          activeLabel.textContent = `Đang lọc: ${found.name}`;
+        } else {
+          state.filterParticipantId = null;
+        }
+      }
+
+      if (!state.filterParticipantId && activeBadge) {
+        activeBadge.classList.add('hidden');
+        activeBadge.classList.remove('inline-flex');
+      }
+
+      if (responses.length === 0) {
+        listEl.innerHTML = `<span class="text-xs text-slate-400 italic">Chưa có thành viên nào nhập lịch.</span>`;
+        return;
+      }
+
+      listEl.innerHTML = responses.map((resp) => {
+        const isFiltered = state.filterParticipantId === resp.id;
+        const slotCount = Array.isArray(resp.slots) ? resp.slots.length : 0;
+        const btnClass = isFiltered
+          ? 'bg-emerald-600 text-white border-emerald-700 font-semibold'
+          : 'bg-[#FAF9F6] hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border-[#E5E2DC]';
+
+        return `
+          <button type="button" data-filter-person="${escapeHtml(resp.id)}" class="person-filter-btn px-2.5 py-1 rounded-lg text-xs border transition-colors cursor-pointer">
+            ${escapeHtml(resp.name)} <span class="opacity-75">(${slotCount})</span>
+          </button>
+        `;
+      }).join('');
+
+      listEl.querySelectorAll('.person-filter-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const personId = btn.getAttribute('data-filter-person');
+          state.filterParticipantId = (state.filterParticipantId === personId) ? null : personId;
+          renderActiveEventView();
+        });
+      });
+    }
+
+    function renderBestTimes(event, responses) {
+      const listEl = document.getElementById('best-times-list');
+      if (!listEl) return;
+
+      if (responses.length === 0) {
+        listEl.innerHTML = `
+          <div class="col-span-full rounded-xl bg-[#FAF9F6] border border-dashed border-[#E5E2DC] p-5 text-center text-xs sm:text-sm text-slate-400">
+            Hãy nhập thời gian rảnh của bạn để hệ thống tự động gợi ý khung giờ lý tưởng nhất cho cả nhóm.
+          </div>
+        `;
+        return;
+      }
+
+      const dates = event.dates || [];
+      const slotMinutes = getEventSlotMinutes(event);
+      const step = event.stepMinutes || 30;
+      const blocks = [];
+
+      dates.forEach((dateKey) => {
+        let currentBlock = null;
+
+        slotMinutes.forEach((minute) => {
+          const slotKey = makeSlotKey(dateKey, minute);
+          const availNames = [];
+          responses.forEach((resp) => {
+            if (Array.isArray(resp.slots) && resp.slots.includes(slotKey)) {
+              availNames.push(resp.name);
+            }
+          });
+
+          const count = availNames.length;
+          if (count === 0) {
+            if (currentBlock) {
+              blocks.push(currentBlock);
+              currentBlock = null;
+            }
+            return;
+          }
+
+          const signature = availNames.slice().sort().join('|');
+          if (
+            currentBlock &&
+            currentBlock.count === count &&
+            currentBlock.signature === signature &&
+            currentBlock.endMinute === minute
+          ) {
+            currentBlock.endMinute = minute + step;
+          } else {
+            if (currentBlock) blocks.push(currentBlock);
+            currentBlock = {
+              dateKey,
+              startMinute: minute,
+              endMinute: minute + step,
+              count,
+              names: availNames,
+              signature,
+              firstSlotKey: slotKey
+            };
+          }
+        });
+
+        if (currentBlock) blocks.push(currentBlock);
+      });
+
+      if (blocks.length === 0) {
+        listEl.innerHTML = `
+          <div class="col-span-full rounded-xl bg-[#FAF9F6] border border-dashed border-[#E5E2DC] p-5 text-center text-xs sm:text-sm text-slate-400">
+            Chưa có ô giờ nào được đánh dấu rảnh.
+          </div>
+        `;
+        return;
+      }
+
+      // Sắp xếp: nhiều người rảnh nhất -> thời lượng dài nhất -> ngày giờ sớm nhất
+      blocks.sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        const durA = a.endMinute - a.startMinute;
+        const durB = b.endMinute - b.startMinute;
+        if (durB !== durA) return durB - durA;
+        if (a.dateKey !== b.dateKey) return a.dateKey.localeCompare(b.dateKey);
+        return a.startMinute - b.startMinute;
+      });
+
+      const topBlocks = blocks.slice(0, 6);
+      const total = responses.length;
+
+      listEl.innerHTML = topBlocks.map((blk, idx) => {
+        const dateInfo = formatDateHeader(blk.dateKey);
+        const durationMins = blk.endMinute - blk.startMinute;
+        const durationLabel = durationMins >= 60
+          ? `${(durationMins / 60).toFixed(durationMins % 60 === 0 ? 0 : 1)} tiếng`
+          : `${durationMins} phút`;
+        const isAllAvailable = blk.count === total;
+
+        return `
+          <div data-best-slot="${blk.firstSlotKey}" class="best-time-card rounded-xl border ${idx === 0 ? 'border-emerald-300 bg-emerald-50/40' : 'border-[#E5E2DC] bg-[#FAF9F6]/60'} hover:border-emerald-400 p-4 space-y-2 transition-all cursor-pointer">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-semibold text-slate-600">${dateInfo.fullLabel}</span>
+              <span class="px-2 py-0.5 rounded-full text-xs font-bold ${isAllAvailable ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'}">
+                ${blk.count}/${total} người
+              </span>
+            </div>
+            <div class="text-base font-bold text-slate-900">
+              ${formatMinutesToTime(blk.startMinute)} – ${formatMinutesToTime(blk.endMinute)}
+              <span class="text-xs font-normal text-slate-500 ml-1">(${durationLabel})</span>
+            </div>
+            <p class="text-xs text-slate-600 line-clamp-1">
+              Rảnh: ${blk.names.map((n) => escapeHtml(n)).join(', ')}
+            </p>
+          </div>
+        `;
+      }).join('');
+
+      listEl.querySelectorAll('.best-time-card').forEach((card) => {
+        card.addEventListener('click', () => {
+          const slotKey = card.getAttribute('data-best-slot');
+          if (slotKey) {
+            state.inspectedSlotKey = slotKey;
+            state.mobileTab = 'group';
+            renderActiveEventView();
+          }
+        });
+      });
+    }
+
+    // =========================================================================
+    // 10. GẮN SỰ KIỆN TƯƠNG TÁC TOÀN CỤC (CHUỘT, CẢM ỨNG & BIỂU MẪU)
+    // =========================================================================
+    function bindGlobalEvents() {
+      // Điều hướng đầu trang
+      document.getElementById('btn-go-home')?.addEventListener('click', navigateToHome);
+      document.getElementById('btn-new-event-top')?.addEventListener('click', navigateToHome);
+
+      // Sao chép mã & link mời
+      const handleCopyCode = () => {
+        if (!state.currentEventId) return;
+        copyTextToClipboard(state.currentEventId, `Đã sao chép mã sự kiện: ${state.currentEventId}`);
+      };
+      const handleCopyLink = () => {
+        if (!state.currentEventId) return;
+        const url = getInviteUrl(state.currentEventId);
+        copyTextToClipboard(url, 'Đã sao chép đường link mời!');
+      };
+
+      document.getElementById('btn-header-copy-code')?.addEventListener('click', handleCopyCode);
+      document.getElementById('btn-copy-code-banner')?.addEventListener('click', handleCopyCode);
+      document.getElementById('btn-copy-link-banner')?.addEventListener('click', handleCopyLink);
+
+      // Biểu mẫu Tham gia sự kiện có sẵn
+      document.getElementById('join-event-form')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const inputEl = document.getElementById('input-join-code');
+        const errEl = document.getElementById('join-error-msg');
+        const code = extractEventCode(inputEl?.value || '');
+
+        if (!code) {
+          errEl.textContent = 'Vui lòng nhập mã sự kiện hoặc dán đường link mời hợp lệ.';
+          errEl.classList.remove('hidden');
+          inputEl?.focus();
+          return;
+        }
+
+        errEl.classList.add('hidden');
+        if (inputEl) inputEl.value = '';
+        navigateToEvent(code);
+      });
+
+      // Điều hướng lịch tháng
+      document.getElementById('btn-prev-month')?.addEventListener('click', () => {
+        state.calMonth -= 1;
+        if (state.calMonth < 0) {
+          state.calMonth = 11;
+          state.calYear -= 1;
+        }
+        renderCalendar();
+      });
+
+      document.getElementById('btn-next-month')?.addEventListener('click', () => {
+        state.calMonth += 1;
+        if (state.calMonth > 11) {
+          state.calMonth = 0;
+          state.calYear += 1;
+        }
+        renderCalendar();
+      });
+
+      document.getElementById('btn-cal-today')?.addEventListener('click', () => {
+        const t = new Date();
+        state.calYear = t.getFullYear();
+        state.calMonth = t.getMonth();
+        renderCalendar();
+      });
+
+      document.getElementById('btn-clear-dates')?.addEventListener('click', () => {
+        state.selectedDates.clear();
+        renderCalendar();
+      });
+
+      // Kéo chọn nhiều ngày trên lịch tháng (Chuột + Cảm ứng)
+      const calGrid = document.getElementById('calendar-grid');
+      if (calGrid) {
+        calGrid.addEventListener('pointerdown', (e) => {
+          const btn = e.target.closest('.cal-day-btn');
+          if (!btn) return;
+          const dateKey = btn.getAttribute('data-date');
+          if (!dateKey) return;
+
+          state.isCalDragging = true;
+          state.calDragMode = state.selectedDates.has(dateKey) ? 'remove' : 'add';
+          applyCalendarDateAction(dateKey, state.calDragMode);
+        });
+
+        calGrid.addEventListener('pointermove', (e) => {
+          if (!state.isCalDragging) return;
+          const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+          const btn = targetEl?.closest('.cal-day-btn');
+          if (!btn) return;
+          const dateKey = btn.getAttribute('data-date');
+          if (!dateKey) return;
+
+          if (state.calDragMode === 'add' && !state.selectedDates.has(dateKey)) {
+            applyCalendarDateAction(dateKey, 'add');
+          } else if (state.calDragMode === 'remove' && state.selectedDates.has(dateKey)) {
+            applyCalendarDateAction(dateKey, 'remove');
+          }
+        });
+      }
+
+      // Chọn độ chia khung giờ (30 phút / 1 tiếng)
+      document.querySelectorAll('.step-option-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const step = Number(btn.getAttribute('data-step')) || 30;
+          state.stepMinutes = step;
+          document.querySelectorAll('.step-option-btn').forEach((b) => {
+            const active = Number(b.getAttribute('data-step')) === step;
+            b.className = active
+              ? 'step-option-btn py-2 px-3 rounded-lg text-xs font-semibold bg-white text-emerald-700 shadow-2xs border border-[#E5E2DC] transition-all cursor-pointer'
+              : 'step-option-btn py-2 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+          });
+          updateCreateSummary();
+        });
+      });
+
+      // Nút tạo lịch hẹn
+      document.getElementById('btn-create-event')?.addEventListener('click', handleCreateEvent);
+
+      // Chuyển tab trên di động
+      document.getElementById('mobile-tab-mine')?.addEventListener('click', () => {
+        state.mobileTab = 'mine';
+        updateMobileTabVisibility();
+      });
+      document.getElementById('mobile-tab-group')?.addEventListener('click', () => {
+        state.mobileTab = 'group';
+        updateMobileTabVisibility();
+      });
+
+      // Đăng nhập / Đổi người tham gia
+      document.getElementById('signin-form')?.addEventListener('submit', handleParticipantSignIn);
+      document.getElementById('btn-signout-participant')?.addEventListener('click', () => {
+        state.currentParticipant = null;
+        state.mySelectedSlots = new Set();
+        renderActiveEventView();
+      });
+
+      // Chọn hết / Xóa hết ô giờ cá nhân
+      document.getElementById('btn-select-all-slots')?.addEventListener('click', async () => {
+        const event = getActiveEvent();
+        if (!event || !state.currentParticipant) return;
+        const slotMinutes = getEventSlotMinutes(event);
+        (event.dates || []).forEach((d) => {
+          slotMinutes.forEach((m) => state.mySelectedSlots.add(makeSlotKey(d, m)));
+        });
+        renderMyAvailabilityGrid(event);
+        await saveMyAvailabilitySlots();
+      });
+
+      document.getElementById('btn-clear-all-slots')?.addEventListener('click', async () => {
+        const event = getActiveEvent();
+        if (!event || !state.currentParticipant) return;
+        state.mySelectedSlots.clear();
+        renderMyAvailabilityGrid(event);
+        await saveMyAvailabilitySlots();
+      });
+
+      // Bỏ lọc thành viên
+      document.getElementById('btn-clear-filter')?.addEventListener('click', () => {
+        state.filterParticipantId = null;
+        renderActiveEventView();
+      });
+
+      // Kéo vùng chữ nhật trên lưới thời gian cá nhân
+      const myGrid = document.getElementById('my-availability-grid');
+      if (myGrid) {
+        myGrid.addEventListener('pointerdown', (e) => {
+          const event = getActiveEvent();
+          if (!event || !state.currentParticipant) return;
+          const cell = e.target.closest('.my-slot-cell');
+          if (!cell) return;
+
+          const slotKey = cell.getAttribute('data-slot-key');
+          const r = Number(cell.getAttribute('data-r'));
+          const c = Number(cell.getAttribute('data-c'));
+
+          state.isSlotDragging = true;
+          state.slotDragMode = state.mySelectedSlots.has(slotKey) ? 'remove' : 'add';
+          state.slotDragStart = { r, c };
+          state.slotDragCurrent = { r, c };
+          state.slotDragBaseSet = new Set(state.mySelectedSlots);
+
+          const preview = computeRectPreviewSet(event);
+          applyVisualMySlots(preview);
+        });
+
+        myGrid.addEventListener('pointermove', (e) => {
+          if (!state.isSlotDragging) return;
+          const event = getActiveEvent();
+          if (!event) return;
+
+          const targetEl = document.elementFromPoint(e.clientX, e.clientY);
+          const cell = targetEl?.closest('.my-slot-cell');
+          if (!cell) return;
+
+          const r = Number(cell.getAttribute('data-r'));
+          const c = Number(cell.getAttribute('data-c'));
+          if (state.slotDragCurrent && state.slotDragCurrent.r === r && state.slotDragCurrent.c === c) {
+            return;
+          }
+
+          state.slotDragCurrent = { r, c };
+          const preview = computeRectPreviewSet(event);
+          applyVisualMySlots(preview);
+        });
+      }
+
+      // Kết thúc kéo thả toàn cục
+      const finishDragging = async () => {
+        if (state.isCalDragging) {
+          state.isCalDragging = false;
+          state.calDragMode = null;
+        }
+
+        if (state.isSlotDragging) {
+          const event = getActiveEvent();
+          if (event) {
+            state.mySelectedSlots = computeRectPreviewSet(event);
+          }
+          state.isSlotDragging = false;
+          state.slotDragMode = null;
+          state.slotDragStart = null;
+          state.slotDragCurrent = null;
+          state.slotDragBaseSet = null;
+
+          await saveMyAvailabilitySlots();
+        }
+      };
+
+      window.addEventListener('pointerup', finishDragging);
+      window.addEventListener('pointercancel', finishDragging);
+      window.addEventListener('hashchange', handleRouteChange);
+    }
+
+    // =========================================================================
+    // 11. KHỞI CHẠY ỨNG DỤNG
+    // =========================================================================
+    async function bootstrap() {
+      initTimeSelects();
+      renderCalendar();
+      bindGlobalEvents();
+      handleRouteChange();
+      await initDataLayer();
+    }
+
+    bootstrap();
+  </script>
+</body>
+</html>

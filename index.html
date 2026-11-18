@@ -949,16 +949,23 @@
       if (firebaseConfig && firebaseConfig.apiKey) {
         try {
           const app = initializeApp(firebaseConfig);
-          auth = getAuth(app);
           db = getFirestore(app);
 
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
+          // Chỉ dùng __initial_auth_token khi chạy bằng cấu hình mặc định của khung xem trước
+          const isCustomProject = Boolean(CUSTOM_FIREBASE_CONFIG && CUSTOM_FIREBASE_CONFIG.apiKey);
+          try {
+            auth = getAuth(app);
+            if (!isCustomProject && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+              await signInAnonymously(auth);
+            }
+            currentUser = auth.currentUser;
+          } catch (authErr) {
+            // Vẫn tiếp tục kết nối Firestore nếu dự án đang mở Test mode mà chưa bật Authentication
+            console.warn("Firebase Auth chưa bật, tiếp tục kết nối Firestore:", authErr?.code || authErr?.message);
           }
 
-          currentUser = auth.currentUser;
           useCloudBackend = true;
           state.initialSyncDone = false;
 
@@ -971,7 +978,7 @@
           subscribeToCloudData();
           return;
         } catch (err) {
-          console.error("Không thể kết nối Firebase, chuyển sang chế độ cục bộ:", err);
+          console.warn("Chuyển sang chế độ lưu cục bộ:", err);
         }
       }
 
@@ -1013,11 +1020,18 @@
           }
         },
         (error) => {
-          console.error("Lỗi đồng bộ danh sách sự kiện:", error);
-          state.initialSyncDone = true;
+          console.warn("Lỗi đồng bộ danh sách sự kiện:", error);
+          useCloudBackend = false;
+          syncFromMemory();
+          renderRecentEvents();
+          if (state.currentEventId) {
+            renderActiveEventView();
+          }
           if (syncDot && syncText) {
-            syncDot.className = 'w-2 h-2 rounded-full bg-rose-500';
-            syncText.textContent = 'Lỗi đồng bộ';
+            syncDot.className = 'w-2 h-2 rounded-full bg-amber-500';
+            syncText.textContent = error?.code === 'permission-denied'
+              ? 'Cần bật Auth/Rules Firestore'
+              : 'Chế độ cục bộ';
           }
         }
       );
@@ -1036,7 +1050,7 @@
           }
         },
         (error) => {
-          console.error("Lỗi đồng bộ phản hồi:", error);
+          console.warn("Lỗi đồng bộ phản hồi:", error);
         }
       );
     }
@@ -1046,12 +1060,16 @@
       saveLocalFallback();
 
       if (useCloudBackend && db) {
-        const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', eventObj.id);
-        await setDoc(eventRef, eventObj);
-      } else {
-        syncFromMemory();
-        renderRecentEvents();
+        try {
+          const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', eventObj.id);
+          await setDoc(eventRef, eventObj);
+          return;
+        } catch (err) {
+          console.warn("Không thể ghi sự kiện lên Firestore, lưu cục bộ:", err);
+        }
       }
+      syncFromMemory();
+      renderRecentEvents();
     }
 
     async function persistParticipantResponse(responseObj) {
@@ -1059,12 +1077,16 @@
       saveLocalFallback();
 
       if (useCloudBackend && db) {
-        const respRef = doc(db, 'artifacts', appId, 'public', 'data', 'responses', responseObj.id);
-        await setDoc(respRef, responseObj);
-      } else {
-        syncFromMemory();
-        renderActiveEventView();
+        try {
+          const respRef = doc(db, 'artifacts', appId, 'public', 'data', 'responses', responseObj.id);
+          await setDoc(respRef, responseObj);
+          return;
+        } catch (err) {
+          console.warn("Không thể ghi phản hồi lên Firestore, lưu cục bộ:", err);
+        }
       }
+      syncFromMemory();
+      renderActiveEventView();
     }
 
     function getActiveEvent() {

@@ -46,23 +46,6 @@
       touch-action: none;
     }
 
-    /* Thanh cuộn mảnh cho bảng nhiều ngày */
-    .grid-scroll::-webkit-scrollbar {
-      height: 6px;
-      width: 6px;
-    }
-    .grid-scroll::-webkit-scrollbar-track {
-      background: #F4F2ED;
-      border-radius: 9999px;
-    }
-    .grid-scroll::-webkit-scrollbar-thumb {
-      background: #CBD5E1;
-      border-radius: 9999px;
-    }
-    .grid-scroll::-webkit-scrollbar-thumb:hover {
-      background: #94A3B8;
-    }
-
     /* Đường kẻ phân tách giờ chẵn và nửa giờ */
     .slot-border-hour {
       border-top: 1px solid #CBD5E1;
@@ -536,10 +519,8 @@
               <span class="text-[11px] text-slate-500">Nhấn giữ & kéo để tô vùng giờ</span>
             </div>
 
-            <!-- Bảng lưới cá nhân -->
-            <div class="overflow-x-auto grid-scroll border border-[#E5E2DC] rounded-xl bg-white">
-              <div id="my-availability-grid" class="min-w-full inline-block no-select paint-grid">
-              </div>
+            <!-- Bảng lưới cá nhân (tách riêng từng bảng ngày) -->
+            <div id="my-availability-grid" class="w-full no-select paint-grid">
             </div>
           </div>
         </div>
@@ -576,10 +557,8 @@
               <span id="heatmap-legend-max" class="font-semibold text-emerald-800">0/0 rảnh</span>
             </div>
 
-            <!-- Bảng bản đồ nhiệt cả nhóm -->
-            <div class="overflow-x-auto grid-scroll border border-[#E5E2DC] rounded-xl bg-white">
-              <div id="group-heatmap-grid" class="min-w-full inline-block no-select">
-              </div>
+            <!-- Bảng bản đồ nhiệt cả nhóm (tách riêng từng bảng ngày) -->
+            <div id="group-heatmap-grid" class="w-full no-select">
             </div>
 
             <!-- Bảng chi tiết khung giờ khi di chuột / chạm -->
@@ -685,7 +664,6 @@
 
     // =========================================================================
     // [CẤU HÌNH CHO GITHUB PAGES] DÁN MÃ CẤU HÌNH FIREBASE CỦA BẠN VÀO ĐÂY
-    // Thay chữ null bên dưới bằng đối tượng cấu hình { apiKey: "...", ... }
     // =========================================================================
     const CUSTOM_FIREBASE_CONFIG = {
       apiKey: "AIzaSyBkdJZPmpJ35pFv_mhKBD8TlEMDyhs2ezE",
@@ -700,7 +678,11 @@
     // =========================================================================
     // 1. KHỞI TẠO KẾT NỐI ĐÁM MÂY & BỘ NHỚ DỰ PHÒNG AN TOÀN
     // =========================================================================
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'when2meet-github';
+    const hasCustomConfig = Boolean(CUSTOM_FIREBASE_CONFIG && CUSTOM_FIREBASE_CONFIG.projectId);
+    const appId = hasCustomConfig
+      ? CUSTOM_FIREBASE_CONFIG.projectId
+      : (typeof __app_id !== 'undefined' ? __app_id : 'when2meet-github');
+
     let firebaseConfig = CUSTOM_FIREBASE_CONFIG;
 
     try {
@@ -721,7 +703,7 @@
     let currentUser = null;
     let useCloudBackend = false;
 
-    // Bộ nhớ dự phòng cục bộ (hoạt động cả khi chưa cấu hình Firebase)
+    // Bộ nhớ dự phòng cục bộ
     const memoryEvents = new Map();
     const memoryResponses = new Map();
     const LOCAL_EVENTS_KEY = 'w2m_local_events_v1';
@@ -797,25 +779,17 @@
     // 3. CÁC HÀM TIỆN ÍCH NGÀY GIỜ, MÃ SỰ KIỆN & SAO CHÉP
     // =========================================================================
     const WEEKDAY_SHORT_VI = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const WEEKDAY_FULL_VI = ['Chủ Nhật', 'Thứ 2', 'Thứ 3', 'Thứ 4', 'Thứ 5', 'Thứ 6', 'Thứ 7'];
     const MONTH_NAMES_VI = [
       'Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6',
       'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'
     ];
 
-    function escapeHtml(str) {
-      return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
-
     function pad2(num) {
       return String(num).padStart(2, '0');
     }
 
-    function toDateKey(year, monthZeroIndexed, day) {
+    function makeDateKey(year, monthZeroIndexed, day) {
       return `${year}-${pad2(monthZeroIndexed + 1)}-${pad2(day)}`;
     }
 
@@ -826,12 +800,17 @@
 
     function formatDateHeader(dateKey) {
       const dateObj = parseDateKey(dateKey);
-      const weekday = WEEKDAY_SHORT_VI[dateObj.getDay()];
+      const dayIdx = dateObj.getDay();
+      const weekday = WEEKDAY_SHORT_VI[dayIdx];
+      const weekdayFull = WEEKDAY_FULL_VI[dayIdx];
       const dayMonth = `${pad2(dateObj.getDate())}/${pad2(dateObj.getMonth() + 1)}`;
       return {
         weekday,
+        weekdayFull,
+        isWeekend: dayIdx === 0 || dayIdx === 6,
+        isSunday: dayIdx === 0,
         dayMonth,
-        fullLabel: `${weekday}, ${dayMonth}/${dateObj.getFullYear()}`
+        fullLabel: `${weekdayFull}, ${dayMonth}/${dateObj.getFullYear()}`
       };
     }
 
@@ -841,6 +820,27 @@
       return `${pad2(h)}:${pad2(m)}`;
     }
 
+    function makeSlotKey(dateKey, minute) {
+      return `${dateKey}|${minute}`;
+    }
+
+    function parseSlotKey(slotKey) {
+      const [dateKey, minStr] = slotKey.split('|');
+      return { dateKey, minute: Number(minStr) };
+    }
+
+    function getEventSlotMinutes(event) {
+      const startMin = Number(event.startHour) * 60;
+      const endMin = Number(event.endHour) * 60;
+      const step = Number(event.stepMinutes) || 30;
+      const slots = [];
+      for (let m = startMin; m < endMin; m += step) {
+        slots.push(m);
+      }
+      return slots;
+    }
+
+    // Sinh mã sự kiện ngắn gọn 6 ký tự dễ đọc (loại bỏ I, O, 0, 1 tránh nhầm lẫn)
     function generateEventCode() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       let code = '';
@@ -850,465 +850,334 @@
       return code;
     }
 
-    function extractEventCode(rawInput) {
-      const cleaned = (rawInput || '').trim();
-      if (!cleaned) return '';
-
-      // Nếu người dùng dán cả URL hoặc chuỗi chứa #event= hoặc ?event=
-      const hashMatch = cleaned.match(/[#?&]event=([A-Za-z0-9_-]+)/i);
+    function extractEventCodeFromInput(rawInput) {
+      if (!rawInput) return '';
+      const trimmed = rawInput.trim();
+      const hashMatch = trimmed.match(/#(?:event=|e=)?([A-Za-z0-9_-]+)/i);
       if (hashMatch && hashMatch[1]) {
         return hashMatch[1].toUpperCase();
       }
-
-      // Nếu chỉ nhập mã trực tiếp
-      return cleaned.replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
+      const queryMatch = trimmed.match(/[?&](?:event|e)=([A-Za-z0-9_-]+)/i);
+      if (queryMatch && queryMatch[1]) {
+        return queryMatch[1].toUpperCase();
+      }
+      return trimmed.replace(/[^A-Za-z0-9_-]/g, '').toUpperCase();
     }
 
-    function isRestrictedPreviewEnv() {
+    function isShareableWebEnvironment() {
       try {
         const proto = window.location.protocol;
         const href = window.location.href || '';
-        return proto === 'about:' || proto === 'file:' || href.startsWith('about:srcdoc');
-      } catch (e) {
+        if (proto !== 'http:' && proto !== 'https:') return false;
+        if (href.startsWith('about:') || href.startsWith('blob:') || href.startsWith('data:')) return false;
         return true;
+      } catch (e) {
+        return false;
       }
     }
 
-    function getInviteUrl(eventId) {
-      try {
+    function getEventShareUrl(eventId) {
+      if (isShareableWebEnvironment()) {
         const baseUrl = window.location.href.split('#')[0].split('?')[0];
         return `${baseUrl}#event=${encodeURIComponent(eventId)}`;
-      } catch (e) {
-        return `#event=${encodeURIComponent(eventId)}`;
       }
+      return eventId;
+    }
+
+    function copyTextToClipboard(text) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      let success = false;
+      try {
+        success = document.execCommand('copy');
+      } catch (e) {
+        success = false;
+      }
+      document.body.removeChild(textarea);
+      return success;
     }
 
     let toastTimer = null;
     function showToast(message) {
-      const toastEl = document.getElementById('toast');
+      const toast = document.getElementById('toast');
       const msgEl = document.getElementById('toast-message');
-      if (!toastEl || !msgEl) return;
-
+      if (!toast || !msgEl) return;
       msgEl.textContent = message;
-      toastEl.classList.remove('opacity-0', 'translate-y-2');
-      toastEl.classList.add('opacity-100', 'translate-y-0');
+      toast.classList.remove('opacity-0', 'translate-y-2');
+      toast.classList.add('opacity-100', 'translate-y-0');
 
       if (toastTimer) clearTimeout(toastTimer);
       toastTimer = setTimeout(() => {
-        toastEl.classList.remove('opacity-100', 'translate-y-0');
-        toastEl.classList.add('opacity-0', 'translate-y-2');
+        toast.classList.add('opacity-0', 'translate-y-2');
+        toast.classList.remove('opacity-100', 'translate-y-0');
       }, 2800);
     }
 
-    function copyTextToClipboard(text, successMessage) {
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = text;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        const ok = document.execCommand('copy');
-        document.body.removeChild(textarea);
+    // =========================================================================
+    // 4. ĐỒNG BỘ DỮ LIỆU FIRESTORE & DỰ PHÒNG LOCAL
+    // =========================================================================
+    function updateSyncStatus(mode, text) {
+      const indicator = document.getElementById('sync-indicator');
+      const dot = document.getElementById('sync-dot');
+      const label = document.getElementById('sync-text');
+      if (!indicator || !dot || !label) return;
 
-        if (ok) {
-          showToast(successMessage);
-          return;
-        }
-      } catch (e) {
-        // Thử sang API clipboard hiện đại bên dưới
-      }
+      indicator.classList.remove('hidden');
+      indicator.classList.add('flex');
+      label.textContent = text;
 
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text)
-          .then(() => showToast(successMessage))
-          .catch(() => showToast('Không thể sao chép tự động, vui lòng bôi đen để chép.'));
+      dot.className = 'w-2 h-2 rounded-full';
+      if (mode === 'cloud') {
+        dot.classList.add('bg-emerald-500');
+      } else if (mode === 'local') {
+        dot.classList.add('bg-sky-500');
       } else {
-        showToast('Không thể sao chép tự động, vui lòng bôi đen để chép.');
+        dot.classList.add('bg-amber-400', 'animate-pulse');
       }
     }
 
-    // =========================================================================
-    // 4. ĐỒNG BỘ DỮ LIỆU FIRESTORE & DỰ PHÒNG
-    // =========================================================================
-    function syncFromMemory() {
-      state.allEvents = Array.from(memoryEvents.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-      state.allResponses = Array.from(memoryResponses.values());
-      state.initialSyncDone = true;
-    }
-
-    async function initDataLayer() {
-      const syncIndicator = document.getElementById('sync-indicator');
-      const syncDot = document.getElementById('sync-dot');
-      const syncText = document.getElementById('sync-text');
-
-      loadLocalFallback();
-      syncFromMemory();
-
-      if (firebaseConfig && firebaseConfig.apiKey) {
-        try {
-          const app = initializeApp(firebaseConfig);
-          db = getFirestore(app);
-
-          // Chỉ dùng __initial_auth_token khi chạy bằng cấu hình mặc định của khung xem trước
-          const isCustomProject = Boolean(CUSTOM_FIREBASE_CONFIG && CUSTOM_FIREBASE_CONFIG.apiKey);
-          try {
-            auth = getAuth(app);
-            if (!isCustomProject && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-              await signInAnonymously(auth);
-            }
-            currentUser = auth.currentUser;
-          } catch (authErr) {
-            // Vẫn tiếp tục kết nối Firestore nếu dự án đang mở Test mode mà chưa bật Authentication
-            console.warn("Firebase Auth chưa bật, tiếp tục kết nối Firestore:", authErr?.code || authErr?.message);
-          }
-
-          useCloudBackend = true;
-          state.initialSyncDone = false;
-
-          if (syncIndicator && syncDot && syncText) {
-            syncIndicator.classList.remove('hidden');
-            syncDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
-            syncText.textContent = 'Đã đồng bộ trực tiếp';
-          }
-
-          subscribeToCloudData();
-          return;
-        } catch (err) {
-          console.warn("Chuyển sang chế độ lưu cục bộ:", err);
-        }
-      }
-
-      // Chế độ lưu cục bộ trên trình duyệt
-      useCloudBackend = false;
-      state.initialSyncDone = true;
-      if (syncIndicator && syncDot && syncText) {
-        syncIndicator.classList.remove('hidden');
-        syncDot.className = 'w-2 h-2 rounded-full bg-slate-400';
-        syncText.textContent = 'Chế độ cục bộ';
-      }
+    function refreshAllViewsFromState() {
       renderRecentEvents();
+
       if (state.currentEventId) {
-        renderActiveEventView();
+        const currentEvent = state.allEvents.find((ev) => ev.id === state.currentEventId);
+        if (currentEvent) {
+          const eventResponses = state.allResponses.filter((r) => r.eventId === state.currentEventId);
+          renderEventHeader(currentEvent, eventResponses);
+          renderGroupHeatmapGrid(currentEvent, eventResponses);
+          renderParticipantsFilter(eventResponses);
+          renderSlotInspector(currentEvent, eventResponses);
+          renderBestTimes(currentEvent, eventResponses);
+
+          if (state.currentParticipant) {
+            const latestMine = eventResponses.find((r) => r.id === state.currentParticipant.id);
+            if (latestMine && !state.isSlotDragging) {
+              state.mySelectedSlots = new Set(latestMine.slots || []);
+              renderMyAvailabilityGrid(currentEvent);
+            }
+          }
+        } else if (state.initialSyncDone) {
+          const titleEl = document.getElementById('event-display-title');
+          const metaEl = document.getElementById('event-display-meta');
+          if (titleEl) {
+            titleEl.textContent = `Không tìm thấy sự kiện mã "${state.currentEventId}"`;
+          }
+          if (metaEl) {
+            metaEl.textContent = 'Sự kiện có thể chưa được tạo hoặc bạn nhập nhầm mã. Hãy bấm "Tạo lịch mới" hoặc quay lại trang chủ để kiểm tra.';
+          }
+        }
       }
     }
 
-    function subscribeToCloudData() {
-      if (!db) return;
-      const syncDot = document.getElementById('sync-dot');
-      const syncText = document.getElementById('sync-text');
+    async function initBackend() {
+      loadLocalFallback();
+      state.allEvents = Array.from(memoryEvents.values());
+      state.allResponses = Array.from(memoryResponses.values());
+      refreshAllViewsFromState();
 
-      const eventsCol = collection(db, 'artifacts', appId, 'public', 'data', 'events');
-      const responsesCol = collection(db, 'artifacts', appId, 'public', 'data', 'responses');
+      if (!firebaseConfig || !firebaseConfig.apiKey) {
+        useCloudBackend = false;
+        state.initialSyncDone = true;
+        updateSyncStatus('local', 'Chế độ lưu cục bộ');
+        refreshAllViewsFromState();
+        return;
+      }
 
-      onSnapshot(
-        eventsCol,
-        (snapshot) => {
-          const items = [];
-          snapshot.forEach((docSnap) => {
-            items.push({ id: docSnap.id, ...docSnap.data() });
-          });
-          items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          state.allEvents = items;
-          state.initialSyncDone = true;
-          renderRecentEvents();
-          if (state.currentEventId) {
-            renderActiveEventView();
+      try {
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        // Xác thực ẩn danh an toàn; nếu chưa bật Anonymous Auth vẫn tiếp tục kết nối Firestore Test Mode
+        try {
+          if (!hasCustomConfig && typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            const cred = await signInWithCustomToken(auth, __initial_auth_token);
+            currentUser = cred.user;
+          } else {
+            const cred = await signInAnonymously(auth);
+            currentUser = cred.user;
           }
-        },
-        (error) => {
-          console.warn("Lỗi đồng bộ danh sách sự kiện:", error);
-          useCloudBackend = false;
-          syncFromMemory();
-          renderRecentEvents();
-          if (state.currentEventId) {
-            renderActiveEventView();
-          }
-          if (syncDot && syncText) {
-            syncDot.className = 'w-2 h-2 rounded-full bg-amber-500';
-            syncText.textContent = error?.code === 'permission-denied'
-              ? 'Cần bật Auth/Rules Firestore'
-              : 'Chế độ cục bộ';
-          }
+        } catch (authErr) {
+          console.warn("Đang kết nối Firestore trực tiếp (chưa kích hoạt Anonymous Auth):", authErr.code || authErr.message);
         }
-      );
 
-      onSnapshot(
-        responsesCol,
-        (snapshot) => {
-          const items = [];
-          snapshot.forEach((docSnap) => {
-            items.push({ id: docSnap.id, ...docSnap.data() });
-          });
-          state.allResponses = items;
-          renderRecentEvents();
-          if (state.currentEventId) {
-            renderActiveEventView();
+        useCloudBackend = true;
+        updateSyncStatus('cloud', 'Đã đồng bộ trực tiếp');
+
+        const eventsColRef = collection(db, 'artifacts', appId, 'public', 'data', 'w2m_events');
+        const responsesColRef = collection(db, 'artifacts', appId, 'public', 'data', 'w2m_responses');
+
+        onSnapshot(
+          eventsColRef,
+          (snapshot) => {
+            const events = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              const item = { id: docSnap.id, ...data };
+              events.push(item);
+              memoryEvents.set(item.id, item);
+            });
+            events.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            state.allEvents = events;
+            state.initialSyncDone = true;
+            saveLocalFallback();
+            refreshAllViewsFromState();
+          },
+          (err) => {
+            console.error("Lỗi đồng bộ danh sách sự kiện:", err);
+            state.initialSyncDone = true;
+            updateSyncStatus('local', 'Chế độ dự phòng');
+            refreshAllViewsFromState();
           }
-        },
-        (error) => {
-          console.warn("Lỗi đồng bộ phản hồi:", error);
-        }
-      );
+        );
+
+        onSnapshot(
+          responsesColRef,
+          (snapshot) => {
+            const responses = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              const item = { id: docSnap.id, ...data };
+              responses.push(item);
+              memoryResponses.set(item.id, item);
+            });
+            responses.sort((a, b) => (a.updatedAt || 0) - (b.updatedAt || 0));
+            state.allResponses = responses;
+            saveLocalFallback();
+            refreshAllViewsFromState();
+          },
+          (err) => {
+            console.error("Lỗi đồng bộ phản hồi thành viên:", err);
+          }
+        );
+      } catch (err) {
+        console.error("Không thể kết nối Firebase, chuyển sang chế độ dự phòng:", err);
+        useCloudBackend = false;
+        state.initialSyncDone = true;
+        updateSyncStatus('local', 'Chế độ lưu cục bộ');
+        refreshAllViewsFromState();
+      }
     }
 
     async function persistEvent(eventObj) {
       memoryEvents.set(eventObj.id, eventObj);
+      state.allEvents = Array.from(memoryEvents.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       saveLocalFallback();
 
       if (useCloudBackend && db) {
         try {
-          const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', eventObj.id);
-          await setDoc(eventRef, eventObj);
-          return;
+          const eventDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'w2m_events', eventObj.id);
+          await setDoc(eventDocRef, eventObj);
         } catch (err) {
-          console.warn("Không thể ghi sự kiện lên Firestore, lưu cục bộ:", err);
+          console.error("Lỗi lưu sự kiện lên đám mây:", err);
         }
       }
-      syncFromMemory();
-      renderRecentEvents();
     }
 
-    async function persistParticipantResponse(responseObj) {
-      memoryResponses.set(responseObj.id, responseObj);
+    async function persistParticipantResponse(respObj) {
+      memoryResponses.set(respObj.id, respObj);
+      state.allResponses = Array.from(memoryResponses.values());
       saveLocalFallback();
+      refreshAllViewsFromState();
 
       if (useCloudBackend && db) {
         try {
-          const respRef = doc(db, 'artifacts', appId, 'public', 'data', 'responses', responseObj.id);
-          await setDoc(respRef, responseObj);
-          return;
+          const respDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'w2m_responses', respObj.id);
+          await setDoc(respDocRef, respObj);
         } catch (err) {
-          console.warn("Không thể ghi phản hồi lên Firestore, lưu cục bộ:", err);
+          console.error("Lỗi lưu thời gian rảnh lên đám mây:", err);
         }
-      }
-      syncFromMemory();
-      renderActiveEventView();
-    }
-
-    function getActiveEvent() {
-      if (!state.currentEventId) return null;
-      return state.allEvents.find((ev) => ev.id.toUpperCase() === state.currentEventId.toUpperCase()) || null;
-    }
-
-    function getEventResponses(eventId) {
-      if (!eventId) return [];
-      return state.allResponses
-        .filter((r) => r.eventId && r.eventId.toUpperCase() === eventId.toUpperCase())
-        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-    }
-
-    // =========================================================================
-    // 5. ĐIỀU HƯỚNG GIỮA TRANG CHỦ & TRANG SỰ KIỆN (AN TOÀN TUYỆT ĐỐI)
-    // =========================================================================
-    function getEventIdFromLocation() {
-      try {
-        const hash = window.location.hash || '';
-        const hashMatch = hash.match(/event=([A-Za-z0-9_-]+)/i);
-        if (hashMatch && hashMatch[1]) {
-          return decodeURIComponent(hashMatch[1]).toUpperCase();
-        }
-        const search = window.location.search || '';
-        const searchMatch = search.match(/[?&]event=([A-Za-z0-9_-]+)/i);
-        if (searchMatch && searchMatch[1]) {
-          return decodeURIComponent(searchMatch[1]).toUpperCase();
-        }
-      } catch (e) {
-        // Bỏ qua
-      }
-      return null;
-    }
-
-    function safeUpdateHash(newHash) {
-      try {
-        if (window.location.hash !== newHash) {
-          window.location.hash = newHash;
-        }
-      } catch (e) {
-        // Bỏ qua trong môi trường sandbox hạn chế hash
-      }
-    }
-
-    function navigateToEvent(eventId) {
-      const normalizedId = extractEventCode(eventId);
-      if (!normalizedId) return;
-
-      state.currentEventId = normalizedId;
-      state.currentParticipant = null;
-      state.mySelectedSlots = new Set();
-      state.filterParticipantId = null;
-      state.inspectedSlotKey = null;
-      state.mobileTab = 'mine';
-
-      safeUpdateHash(`#event=${encodeURIComponent(normalizedId)}`);
-      showScreen('event');
-      renderActiveEventView();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function navigateToHome() {
-      state.currentEventId = null;
-      state.currentParticipant = null;
-      state.mySelectedSlots = new Set();
-      state.filterParticipantId = null;
-      state.inspectedSlotKey = null;
-
-      safeUpdateHash('');
-      showScreen('create');
-      renderRecentEvents();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-
-    function handleRouteChange() {
-      const urlEventId = getEventIdFromLocation();
-      if (urlEventId) {
-        if (state.currentEventId !== urlEventId) {
-          state.currentEventId = urlEventId;
-          state.currentParticipant = null;
-          state.mySelectedSlots = new Set();
-          state.filterParticipantId = null;
-          state.inspectedSlotKey = null;
-        }
-        showScreen('event');
-        renderActiveEventView();
-      } else {
-        state.currentEventId = null;
-        showScreen('create');
-        renderRecentEvents();
-      }
-    }
-
-    function showScreen(screenName) {
-      const createView = document.getElementById('create-view');
-      const eventView = document.getElementById('event-view');
-      const headerEventActions = document.getElementById('header-event-actions');
-
-      if (screenName === 'event') {
-        createView.classList.add('hidden');
-        eventView.classList.remove('hidden');
-        headerEventActions.classList.remove('hidden');
-        headerEventActions.classList.add('flex');
-      } else {
-        eventView.classList.add('hidden');
-        createView.classList.remove('hidden');
-        headerEventActions.classList.add('hidden');
-        headerEventActions.classList.remove('flex');
       }
     }
 
     // =========================================================================
-    // 6. MÀN HÌNH 1: LỊCH THÁNG & TẠO SỰ KIỆN MỚI
+    // 5. MÀN HÌNH 1: TẠO SỰ KIỆN MỚI & THAM GIA BẰNG MÃ
     // =========================================================================
-    function initTimeSelects() {
-      const startSelect = document.getElementById('select-start-hour');
-      const endSelect = document.getElementById('select-end-hour');
-      if (!startSelect || !endSelect) return;
+    function initHourSelects() {
+      const startSel = document.getElementById('select-start-hour');
+      const endSel = document.getElementById('select-end-hour');
+      if (!startSel || !endSel) return;
 
-      let startOptionsHtml = '';
+      startSel.innerHTML = '';
+      endSel.innerHTML = '';
+
       for (let h = 0; h <= 23; h++) {
-        const selected = h === 8 ? 'selected' : '';
-        startOptionsHtml += `<option value="${h}" ${selected}>${pad2(h)}:00</option>`;
+        const opt = document.createElement('option');
+        opt.value = String(h);
+        opt.textContent = `${pad2(h)}:00`;
+        if (h === 8) opt.selected = true;
+        startSel.appendChild(opt);
       }
-      startSelect.innerHTML = startOptionsHtml;
 
-      let endOptionsHtml = '';
       for (let h = 1; h <= 24; h++) {
-        const selected = h === 21 ? 'selected' : '';
-        const label = h === 24 ? '24:00 (Nửa đêm)' : `${pad2(h)}:00`;
-        endOptionsHtml += `<option value="${h}" ${selected}>${label}</option>`;
+        const opt = document.createElement('option');
+        opt.value = String(h);
+        opt.textContent = h === 24 ? '24:00 (Nửa đêm)' : `${pad2(h)}:00`;
+        if (h === 21) opt.selected = true;
+        endSel.appendChild(opt);
       }
-      endSelect.innerHTML = endOptionsHtml;
-
-      startSelect.addEventListener('change', () => {
-        const s = Number(startSelect.value);
-        const e = Number(endSelect.value);
-        if (e <= s) {
-          endSelect.value = String(Math.min(24, s + 1));
-        }
-        updateCreateSummary();
-      });
-
-      endSelect.addEventListener('change', () => {
-        const s = Number(startSelect.value);
-        const e = Number(endSelect.value);
-        if (e <= s) {
-          startSelect.value = String(Math.max(0, e - 1));
-        }
-        updateCreateSummary();
-      });
     }
 
-    function renderCalendar() {
-      const gridEl = document.getElementById('calendar-grid');
-      const labelEl = document.getElementById('calendar-month-label');
-      if (!gridEl || !labelEl) return;
+    function renderCalendarGrid() {
+      const grid = document.getElementById('calendar-grid');
+      const monthLabel = document.getElementById('calendar-month-label');
+      const countLabel = document.getElementById('selected-dates-count');
+      if (!grid || !monthLabel || !countLabel) return;
 
-      labelEl.textContent = `${MONTH_NAMES_VI[state.calMonth]}, ${state.calYear}`;
+      monthLabel.textContent = `${MONTH_NAMES_VI[state.calMonth]}, ${state.calYear}`;
 
       const firstDayOfMonth = new Date(state.calYear, state.calMonth, 1);
-      // Quy đổi Chủ nhật (0) thành 6, Thứ 2 (1) thành 0
-      const startWeekday = (firstDayOfMonth.getDay() + 6) % 7;
+      const startOffset = (firstDayOfMonth.getDay() + 6) % 7;
       const daysInMonth = new Date(state.calYear, state.calMonth + 1, 0).getDate();
 
-      const today = new Date();
-      const todayKey = toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayKey = makeDateKey(now.getFullYear(), now.getMonth(), now.getDate());
+      grid.innerHTML = '';
 
-      let html = '';
-      for (let i = 0; i < startWeekday; i++) {
-        html += `<div class="h-10 sm:h-11 rounded-xl bg-transparent"></div>`;
+      for (let i = 0; i < startOffset; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'h-10 sm:h-11';
+        grid.appendChild(emptyCell);
       }
 
       for (let day = 1; day <= daysInMonth; day++) {
-        const dateKey = toDateKey(state.calYear, state.calMonth, day);
+        const dateKey = makeDateKey(state.calYear, state.calMonth, day);
         const isSelected = state.selectedDates.has(dateKey);
         const isToday = dateKey === todayKey;
 
-        let classes = 'cal-day-btn h-10 sm:h-11 rounded-xl text-xs sm:text-sm font-semibold flex flex-col items-center justify-center transition-all cursor-pointer border ';
-        if (isSelected) {
-          classes += 'bg-emerald-600 text-white border-emerald-700 shadow-2xs scale-[1.02]';
-        } else if (isToday) {
-          classes += 'bg-emerald-50/70 text-emerald-900 border-emerald-300 hover:bg-emerald-100/70';
-        } else {
-          classes += 'bg-[#FAF9F6] text-slate-700 border-[#E5E2DC] hover:bg-emerald-50/60 hover:border-emerald-200';
-        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.dateKey = dateKey;
+        btn.textContent = String(day);
 
-        html += `
-          <button type="button" data-date="${dateKey}" class="${classes}">
-            <span>${day}</span>
-            ${isToday ? `<span class="w-1 h-1 rounded-full ${isSelected ? 'bg-white' : 'bg-emerald-600'} mt-0.5"></span>` : ''}
-          </button>
-        `;
+        let baseClasses = 'cal-day-btn h-10 sm:h-11 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center transition-all cursor-pointer relative ';
+        if (isSelected) {
+          baseClasses += 'bg-emerald-600 text-white shadow-2xs ring-2 ring-emerald-600/20';
+        } else if (isToday) {
+          baseClasses += 'bg-emerald-50/80 text-emerald-800 border border-emerald-300 hover:bg-emerald-100';
+        } else {
+          baseClasses += 'bg-[#FAF9F6] text-slate-700 border border-[#E5E2DC] hover:bg-emerald-50/70 hover:border-emerald-300';
+        }
+        btn.className = baseClasses;
+        grid.appendChild(btn);
       }
 
-      gridEl.innerHTML = html;
+      const count = state.selectedDates.size;
+      countLabel.textContent = `Đã chọn ${count} ngày`;
       updateCreateSummary();
     }
 
-    function applyCalendarDateAction(dateKey, mode) {
-      if (!dateKey) return;
-      if (mode === 'add') {
-        state.selectedDates.add(dateKey);
-      } else {
-        state.selectedDates.delete(dateKey);
-      }
-      renderCalendar();
-    }
-
     function updateCreateSummary() {
-      const countEl = document.getElementById('selected-dates-count');
       const summaryEl = document.getElementById('create-summary-text');
-      const startHour = Number(document.getElementById('select-start-hour')?.value ?? 8);
-      const endHour = Number(document.getElementById('select-end-hour')?.value ?? 21);
+      const startHour = Number(document.getElementById('select-start-hour').value);
+      const endHour = Number(document.getElementById('select-end-hour').value);
+      if (!summaryEl) return;
 
       const count = state.selectedDates.size;
-      if (countEl) {
-        countEl.textContent = `Đã chọn ${count} ngày`;
-      }
-
-      if (!summaryEl) return;
       if (count === 0) {
         summaryEl.textContent = 'Vui lòng chọn ít nhất 1 ngày trên lịch bên trái.';
         return;
@@ -1317,101 +1186,50 @@
       const sortedDates = Array.from(state.selectedDates).sort();
       const firstInfo = formatDateHeader(sortedDates[0]);
       const lastInfo = formatDateHeader(sortedDates[sortedDates.length - 1]);
-      const dateDesc = count === 1
+      const dateRangeText = count === 1
         ? `${firstInfo.fullLabel}`
-        : `${count} ngày (từ ${firstInfo.dayMonth} đến ${lastInfo.dayMonth})`;
+        : `${count} ngày (${firstInfo.dayMonth} → ${lastInfo.dayMonth})`;
 
-      summaryEl.textContent = `Khảo sát ${dateDesc}, khung giờ từ ${pad2(startHour)}:00 đến ${pad2(endHour)}:00 (mỗi ô ${state.stepMinutes} phút).`;
-    }
-
-    function renderRecentEvents() {
-      const listEl = document.getElementById('recent-events-list');
-      const countEl = document.getElementById('recent-events-count');
-      if (!listEl || !countEl) return;
-
-      countEl.textContent = String(state.allEvents.length);
-
-      if (state.allEvents.length === 0) {
-        listEl.innerHTML = `
-          <div class="col-span-full bg-white rounded-2xl border border-dashed border-[#E5E2DC] p-6 text-center text-xs sm:text-sm text-slate-400">
-            Chưa có lịch hẹn nào được tạo. Hãy tạo lịch hẹn đầu tiên của nhóm bạn ở phía trên!
-          </div>
-        `;
-        return;
-      }
-
-      listEl.innerHTML = state.allEvents.map((ev) => {
-        const responses = getEventResponses(ev.id);
-        const dates = Array.isArray(ev.dates) ? ev.dates : [];
-        const firstDate = dates.length > 0 ? formatDateHeader(dates[0]).dayMonth : '';
-        const lastDate = dates.length > 1 ? ` - ${formatDateHeader(dates[dates.length - 1]).dayMonth}` : '';
-
-        return `
-          <button type="button" data-open-event="${escapeHtml(ev.id)}" class="recent-event-card text-left bg-white hover:bg-emerald-50/40 rounded-2xl border border-[#E5E2DC] hover:border-emerald-300 p-4 shadow-2xs transition-all group cursor-pointer space-y-2">
-            <div class="flex items-start justify-between gap-2">
-              <h3 class="font-bold text-sm text-slate-900 group-hover:text-emerald-800 line-clamp-1">
-                ${escapeHtml(ev.title)}
-              </h3>
-              <span class="shrink-0 font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#FAF9F6] border border-[#E5E2DC] text-emerald-700">
-                ${escapeHtml(ev.id)}
-              </span>
-            </div>
-            <div class="flex items-center justify-between text-xs text-slate-500">
-              <span>${dates.length} ngày (${firstDate}${lastDate})</span>
-              <span class="font-medium text-emerald-700">${responses.length} người</span>
-            </div>
-          </button>
-        `;
-      }).join('');
-
-      listEl.querySelectorAll('.recent-event-card').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const evId = btn.getAttribute('data-open-event');
-          if (evId) navigateToEvent(evId);
-        });
-      });
+      summaryEl.textContent = `${dateRangeText}, từ ${pad2(startHour)}:00 đến ${pad2(endHour)}:00 (mỗi ô ${state.stepMinutes} phút).`;
     }
 
     async function handleCreateEvent() {
       const titleInput = document.getElementById('input-event-title');
       const errorEl = document.getElementById('create-error-msg');
-      const startSelect = document.getElementById('select-start-hour');
-      const endSelect = document.getElementById('select-end-hour');
+      const createBtn = document.getElementById('btn-create-event');
 
-      const title = (titleInput?.value || '').trim();
+      const title = titleInput.value.trim();
+      const startHour = Number(document.getElementById('select-start-hour').value);
+      const endHour = Number(document.getElementById('select-end-hour').value);
+      const sortedDates = Array.from(state.selectedDates).sort();
+
+      errorEl.classList.add('hidden');
+
       if (!title) {
         errorEl.textContent = 'Vui lòng nhập tên sự kiện trước khi tạo.';
         errorEl.classList.remove('hidden');
-        titleInput?.focus();
+        titleInput.focus();
         return;
       }
 
-      if (state.selectedDates.size === 0) {
+      if (sortedDates.length === 0) {
         errorEl.textContent = 'Vui lòng chọn ít nhất 1 ngày trên lịch.';
         errorEl.classList.remove('hidden');
         return;
       }
 
-      const startHour = Number(startSelect?.value ?? 8);
-      const endHour = Number(endSelect?.value ?? 21);
       if (endHour <= startHour) {
-        errorEl.textContent = 'Giờ kết thúc phải muộn hơn giờ bắt đầu.';
+        errorEl.textContent = 'Giờ kết thúc ("Không muộn hơn") phải lớn hơn giờ bắt đầu ("Không sớm hơn").';
         errorEl.classList.remove('hidden');
         return;
       }
 
-      errorEl.classList.add('hidden');
+      createBtn.disabled = true;
+      createBtn.classList.add('opacity-70');
 
-      // Tạo mã sự kiện 6 ký tự duy nhất
-      let newCode = generateEventCode();
-      const existingIds = new Set(state.allEvents.map((e) => e.id.toUpperCase()));
-      while (existingIds.has(newCode)) {
-        newCode = generateEventCode();
-      }
-
-      const sortedDates = Array.from(state.selectedDates).sort();
+      const eventId = generateEventCode();
       const newEvent = {
-        id: newCode,
+        id: eventId,
         title,
         dates: sortedDates,
         startHour,
@@ -1421,230 +1239,369 @@
       };
 
       await persistEvent(newEvent);
-      if (titleInput) titleInput.value = '';
-      showToast(`Đã tạo lịch hẹn (Mã: ${newCode})`);
-      navigateToEvent(newCode);
+
+      createBtn.disabled = false;
+      createBtn.classList.remove('opacity-70');
+
+      navigateToEvent(eventId);
+      showToast(`Đã tạo lịch hẹn (Mã: ${eventId})!`);
     }
 
-    // =========================================================================
-    // 7. MÀN HÌNH 2: BẢNG KHẢO SÁT CÁ NHÂN & BẢN ĐỒ NHIỆT NHÓM
-    // =========================================================================
-    function getEventSlotMinutes(event) {
-      const startMin = (event.startHour ?? 8) * 60;
-      const endMin = (event.endHour ?? 21) * 60;
-      const step = event.stepMinutes || 30;
-      const slots = [];
-      for (let m = startMin; m < endMin; m += step) {
-        slots.push(m);
-      }
-      return slots;
-    }
+    function handleJoinEventByCode(e) {
+      e.preventDefault();
+      const inputEl = document.getElementById('input-join-code');
+      const errorEl = document.getElementById('join-error-msg');
+      if (!inputEl || !errorEl) return;
 
-    function makeSlotKey(dateKey, minuteOfDay) {
-      return `${dateKey}_${minuteOfDay}`;
-    }
+      const extractedCode = extractEventCodeFromInput(inputEl.value);
+      errorEl.classList.add('hidden');
 
-    function renderActiveEventView() {
-      const titleEl = document.getElementById('event-display-title');
-      const metaEl = document.getElementById('event-display-meta');
-      const badgeEl = document.getElementById('event-participant-badge');
-      const headerCodeEl = document.getElementById('header-event-code-text');
-      const bannerCodeEl = document.getElementById('banner-event-code');
-      const previewNoticeEl = document.getElementById('preview-share-notice');
-
-      const displayCode = state.currentEventId || '------';
-      if (headerCodeEl) headerCodeEl.textContent = displayCode;
-      if (bannerCodeEl) bannerCodeEl.textContent = displayCode;
-
-      if (previewNoticeEl) {
-        if (isRestrictedPreviewEnv()) {
-          previewNoticeEl.classList.remove('hidden');
-        } else {
-          previewNoticeEl.classList.add('hidden');
-        }
-      }
-
-      const event = getActiveEvent();
-      if (!event) {
-        if (useCloudBackend && !state.initialSyncDone) {
-          titleEl.textContent = `Đang tải sự kiện (${displayCode})...`;
-          metaEl.textContent = 'Đang đồng bộ dữ liệu lịch hẹn từ máy chủ, vui lòng chờ trong giây lát...';
-        } else {
-          titleEl.textContent = `Không tìm thấy sự kiện (${displayCode})`;
-          metaEl.textContent = 'Mã sự kiện không tồn tại hoặc đã bị xóa. Bạn có thể quay về trang chủ để kiểm tra lại mã.';
-        }
-        badgeEl.textContent = '0 người tham gia';
+      if (!extractedCode) {
+        errorEl.textContent = 'Vui lòng nhập mã sự kiện hoặc dán đường dẫn mời hợp lệ.';
+        errorEl.classList.remove('hidden');
+        inputEl.focus();
         return;
       }
 
-      const responses = getEventResponses(event.id);
-      const dates = Array.isArray(event.dates) ? event.dates : [];
-
-      titleEl.textContent = event.title;
-      badgeEl.textContent = `${responses.length} người tham gia`;
-
-      const firstDateStr = dates.length > 0 ? formatDateHeader(dates[0]).fullLabel : '';
-      const lastDateStr = dates.length > 1 ? ` → ${formatDateHeader(dates[dates.length - 1]).fullLabel}` : '';
-      metaEl.textContent = `${dates.length} ngày (${firstDateStr}${lastDateStr}) • Khung giờ ${pad2(event.startHour)}:00 – ${pad2(event.endHour)}:00 (${event.stepMinutes || 30} phút/ô)`;
-
-      // Cập nhật giao diện đăng nhập / lưới cá nhân
-      const signinContainer = document.getElementById('signin-container');
-      const myGridContainer = document.getElementById('my-grid-container');
-      const saveStatusEl = document.getElementById('your-save-status');
-      const subtitleEl = document.getElementById('your-panel-subtitle');
-
-      if (state.currentParticipant) {
-        // Đồng bộ lại slot của người dùng nếu có cập nhật từ cloud
-        const latestResp = responses.find((r) => r.id === state.currentParticipant.id);
-        if (latestResp && !state.isSlotDragging) {
-          state.mySelectedSlots = new Set(Array.isArray(latestResp.slots) ? latestResp.slots : []);
-        }
-
-        signinContainer.classList.add('hidden');
-        myGridContainer.classList.remove('hidden');
-        saveStatusEl.classList.remove('hidden');
-        saveStatusEl.classList.add('inline-flex');
-        subtitleEl.textContent = 'Bấm hoặc kéo thả để đánh dấu khung giờ bạn rảnh';
-
-        const nameEl = document.getElementById('my-signed-in-name');
-        const avatarEl = document.getElementById('my-avatar-initial');
-        if (nameEl) nameEl.textContent = state.currentParticipant.name;
-        if (avatarEl) avatarEl.textContent = state.currentParticipant.name.charAt(0).toUpperCase();
-
-        renderMyAvailabilityGrid(event);
-      } else {
-        signinContainer.classList.remove('hidden');
-        myGridContainer.classList.add('hidden');
-        saveStatusEl.classList.add('hidden');
-        saveStatusEl.classList.remove('inline-flex');
-        subtitleEl.textContent = 'Đăng nhập nhanh bằng tên để đánh dấu lịch rảnh';
-      }
-
-      renderGroupHeatmapGrid(event, responses);
-      renderParticipantsFilter(responses);
-      renderSlotInspector(event, responses);
-      renderBestTimes(event, responses);
-      updateMobileTabVisibility();
+      inputEl.value = '';
+      navigateToEvent(extractedCode);
     }
 
-    function updateMobileTabVisibility() {
-      const panelMine = document.getElementById('panel-your-availability');
-      const panelGroup = document.getElementById('panel-group-availability');
-      const tabMine = document.getElementById('mobile-tab-mine');
-      const tabGroup = document.getElementById('mobile-tab-group');
+    function renderRecentEvents() {
+      const section = document.getElementById('recent-events-section');
+      const listEl = document.getElementById('recent-events-list');
+      const countEl = document.getElementById('recent-events-count');
+      if (!section || !listEl || !countEl) return;
 
-      if (!panelMine || !panelGroup || !tabMine || !tabGroup) return;
+      const events = state.allEvents || [];
+      countEl.textContent = String(events.length);
 
-      if (state.mobileTab === 'mine') {
-        panelMine.classList.remove('hidden');
-        panelGroup.classList.add('hidden', 'lg:block');
-        tabMine.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer';
-        tabGroup.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+      if (events.length === 0) {
+        listEl.innerHTML = `
+          <div class="col-span-full rounded-2xl border border-dashed border-[#E5E2DC] bg-white/60 p-6 text-center text-xs sm:text-sm text-slate-500">
+            Chưa có lịch hẹn nào được tạo. Hãy tạo lịch đầu tiên ở phía trên!
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = events.slice(0, 9).map((ev) => {
+        const respCount = state.allResponses.filter((r) => r.eventId === ev.id).length;
+        const datesCount = Array.isArray(ev.dates) ? ev.dates.length : 0;
+        const firstDate = datesCount > 0 ? formatDateHeader(ev.dates[0]).dayMonth : '';
+        const lastDate = datesCount > 1 ? ` - ${formatDateHeader(ev.dates[datesCount - 1]).dayMonth}` : '';
+
+        return `
+          <button type="button" data-open-event="${ev.id}" class="recent-event-card text-left bg-white hover:bg-emerald-50/40 rounded-2xl border border-[#E5E2DC] hover:border-emerald-300 p-4 shadow-2xs transition-all flex flex-col justify-between gap-3 group cursor-pointer">
+            <div class="space-y-1.5">
+              <div class="flex items-start justify-between gap-2">
+                <h3 class="font-semibold text-sm text-slate-900 group-hover:text-emerald-800 line-clamp-1">
+                  ${escapeHtml(ev.title)}
+                </h3>
+                <span class="shrink-0 font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-[#FAF9F6] text-emerald-700 border border-[#E5E2DC]">
+                  ${escapeHtml(ev.id)}
+                </span>
+              </div>
+              <p class="text-xs text-slate-500">
+                ${datesCount} ngày (${firstDate}${lastDate}) • ${pad2(ev.startHour)}:00 - ${pad2(ev.endHour)}:00
+              </p>
+            </div>
+            <div class="flex items-center justify-between text-xs pt-2 border-t border-[#E5E2DC]/70">
+              <span class="font-medium text-emerald-700">${respCount} người tham gia</span>
+              <span class="text-slate-400 group-hover:text-emerald-700 font-medium">Mở bảng &rarr;</span>
+            </div>
+          </button>
+        `;
+      }).join('');
+
+      listEl.querySelectorAll('.recent-event-card').forEach((card) => {
+        card.addEventListener('click', () => {
+          const evId = card.getAttribute('data-open-event');
+          if (evId) navigateToEvent(evId);
+        });
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // =========================================================================
+    // 6. MÀN HÌNH 2: ĐIỀU HƯỚNG & HIỂN THỊ BẢNG KHẢO SÁT SỰ KIỆN
+    // =========================================================================
+    function navigateToEvent(eventId) {
+      state.currentEventId = eventId;
+      state.currentParticipant = null;
+      state.mySelectedSlots = new Set();
+      state.filterParticipantId = null;
+      state.inspectedSlotKey = null;
+
+      if (isShareableWebEnvironment()) {
+        try {
+          window.location.hash = `event=${encodeURIComponent(eventId)}`;
+        } catch (e) {
+          // Bỏ qua nếu môi trường sandbox chặn thay đổi hash
+        }
+      }
+
+      openEventView(eventId);
+    }
+
+    function navigateToHome() {
+      state.currentEventId = null;
+      state.currentParticipant = null;
+      state.mySelectedSlots = new Set();
+      state.filterParticipantId = null;
+      state.inspectedSlotKey = null;
+
+      if (isShareableWebEnvironment()) {
+        try {
+          window.location.hash = '';
+        } catch (e) {
+          // Bỏ qua nếu môi trường sandbox chặn thay đổi hash
+        }
+      }
+
+      document.getElementById('event-view').classList.add('hidden');
+      document.getElementById('create-view').classList.remove('hidden');
+      document.getElementById('header-event-actions').classList.add('hidden');
+      document.getElementById('header-event-actions').classList.remove('flex');
+      renderRecentEvents();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function handleRouteChange() {
+      let eventIdFromUrl = null;
+      try {
+        const hash = window.location.hash || '';
+        const search = window.location.search || '';
+        if (hash.startsWith('#event=')) {
+          eventIdFromUrl = decodeURIComponent(hash.replace('#event=', '')).trim();
+        } else if (search.includes('event=')) {
+          const params = new URLSearchParams(search);
+          eventIdFromUrl = (params.get('event') || '').trim();
+        }
+      } catch (e) {
+        eventIdFromUrl = null;
+      }
+
+      if (eventIdFromUrl) {
+        if (state.currentEventId !== eventIdFromUrl) {
+          state.currentEventId = eventIdFromUrl;
+          state.currentParticipant = null;
+          state.mySelectedSlots = new Set();
+          state.filterParticipantId = null;
+          state.inspectedSlotKey = null;
+          openEventView(eventIdFromUrl);
+        }
+      } else if (state.currentEventId !== null) {
+        state.currentEventId = null;
+        document.getElementById('event-view').classList.add('hidden');
+        document.getElementById('create-view').classList.remove('hidden');
+        document.getElementById('header-event-actions').classList.add('hidden');
+        document.getElementById('header-event-actions').classList.remove('flex');
+      }
+    }
+
+    function openEventView(eventId) {
+      document.getElementById('create-view').classList.add('hidden');
+      document.getElementById('event-view').classList.remove('hidden');
+      document.getElementById('header-event-actions').classList.remove('hidden');
+      document.getElementById('header-event-actions').classList.add('flex');
+
+      const headerCodeEl = document.getElementById('header-event-code-text');
+      const bannerCodeEl = document.getElementById('banner-event-code');
+      if (headerCodeEl) headerCodeEl.textContent = eventId;
+      if (bannerCodeEl) bannerCodeEl.textContent = eventId;
+
+      const noticeEl = document.getElementById('preview-share-notice');
+      if (noticeEl) {
+        if (isShareableWebEnvironment()) {
+          noticeEl.classList.add('hidden');
+        } else {
+          noticeEl.classList.remove('hidden');
+        }
+      }
+
+      document.getElementById('signin-error-msg').classList.add('hidden');
+      document.getElementById('input-participant-name').value = '';
+      document.getElementById('input-participant-pin').value = '';
+
+      setMobileTab('mine');
+      renderYourPanel();
+
+      const event = state.allEvents.find((ev) => ev.id === eventId);
+      const responses = state.allResponses.filter((r) => r.eventId === eventId);
+
+      if (event) {
+        renderEventHeader(event, responses);
+        renderGroupHeatmapGrid(event, responses);
+        renderParticipantsFilter(responses);
+        renderSlotInspector(event, responses);
+        renderBestTimes(event, responses);
       } else {
-        panelMine.classList.add('hidden', 'lg:block');
-        panelGroup.classList.remove('hidden');
-        tabGroup.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer';
-        tabMine.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+        document.getElementById('event-display-title').textContent = state.initialSyncDone
+          ? `Không tìm thấy sự kiện mã "${eventId}"`
+          : `Đang tải sự kiện "${eventId}"...`;
+        document.getElementById('event-display-meta').textContent = state.initialSyncDone
+          ? 'Vui lòng kiểm tra lại mã sự kiện hoặc bấm "Tạo lịch mới".'
+          : 'Đang đồng bộ dữ liệu từ máy chủ...';
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function renderEventHeader(event, responses) {
+      const titleEl = document.getElementById('event-display-title');
+      const badgeEl = document.getElementById('event-participant-badge');
+      const metaEl = document.getElementById('event-display-meta');
+      const headerCodeEl = document.getElementById('header-event-code-text');
+      const bannerCodeEl = document.getElementById('banner-event-code');
+
+      if (titleEl) titleEl.textContent = event.title;
+      if (headerCodeEl) headerCodeEl.textContent = event.id;
+      if (bannerCodeEl) bannerCodeEl.textContent = event.id;
+      if (badgeEl) {
+        badgeEl.textContent = `${responses.length} người tham gia`;
+      }
+      if (metaEl) {
+        const datesCount = (event.dates || []).length;
+        metaEl.textContent = `${datesCount} ngày khảo sát • Khung giờ ${pad2(event.startHour)}:00 - ${pad2(event.endHour)}:00 • Mỗi ô ${event.stepMinutes || 30} phút`;
+      }
+    }
+
+    // =========================================================================
+    // 7. ĐĂNG NHẬP NHANH & LƯU THỜI GIAN RẢNH CÁ NHÂN
+    // =========================================================================
+    function renderYourPanel() {
+      const signinBox = document.getElementById('signin-container');
+      const gridBox = document.getElementById('my-grid-container');
+      const subtitleEl = document.getElementById('your-panel-subtitle');
+      const saveStatusEl = document.getElementById('your-save-status');
+
+      if (!state.currentParticipant) {
+        signinBox.classList.remove('hidden');
+        gridBox.classList.add('hidden');
+        saveStatusEl.classList.add('hidden');
+        saveStatusEl.classList.remove('flex');
+        subtitleEl.textContent = 'Đăng nhập nhanh bằng tên để đánh dấu lịch rảnh';
+        return;
+      }
+
+      signinBox.classList.add('hidden');
+      gridBox.classList.remove('hidden');
+      saveStatusEl.classList.remove('hidden');
+      saveStatusEl.classList.add('flex');
+      subtitleEl.textContent = 'Bấm hoặc kéo thả để đánh dấu khung giờ bạn rảnh';
+
+      const name = state.currentParticipant.name;
+      document.getElementById('my-signed-in-name').textContent = name;
+      document.getElementById('my-avatar-initial').textContent = name.charAt(0).toUpperCase();
+
+      const event = state.allEvents.find((ev) => ev.id === state.currentEventId);
+      if (event) {
+        renderMyAvailabilityGrid(event);
       }
     }
 
     async function handleParticipantSignIn(e) {
       e.preventDefault();
-      const event = getActiveEvent();
-      if (!event) {
-        showToast('Sự kiện chưa sẵn sàng hoặc không tồn tại.');
-        return;
-      }
-
       const nameInput = document.getElementById('input-participant-name');
       const pinInput = document.getElementById('input-participant-pin');
-      const errEl = document.getElementById('signin-error-msg');
+      const errorEl = document.getElementById('signin-error-msg');
 
-      const name = (nameInput?.value || '').trim();
-      const pin = (pinInput?.value || '').trim();
+      const rawName = nameInput.value.trim();
+      const pin = pinInput.value.trim();
+      errorEl.classList.add('hidden');
 
-      if (!name) {
-        errEl.textContent = 'Vui lòng nhập tên của bạn.';
-        errEl.classList.remove('hidden');
-        nameInput?.focus();
+      if (!rawName) {
+        errorEl.textContent = 'Vui lòng nhập tên của bạn để tiếp tục.';
+        errorEl.classList.remove('hidden');
+        nameInput.focus();
         return;
       }
 
       if (pin && !/^\d{4}$/.test(pin)) {
-        errEl.textContent = 'Mã PIN phải gồm đúng 4 chữ số (hoặc để trống).';
-        errEl.classList.remove('hidden');
-        pinInput?.focus();
+        errorEl.textContent = 'Mã PIN tùy chọn phải gồm đúng 4 chữ số.';
+        errorEl.classList.remove('hidden');
+        pinInput.focus();
         return;
       }
 
-      const responses = getEventResponses(event.id);
-      const existing = responses.find((r) => r.name.toLowerCase() === name.toLowerCase());
+      const eventResponses = state.allResponses.filter((r) => r.eventId === state.currentEventId);
+      const existing = eventResponses.find(
+        (r) => r.name.trim().toLowerCase() === rawName.toLowerCase()
+      );
 
       if (existing) {
         if (existing.pin && existing.pin !== pin) {
-          errEl.textContent = 'Tên này đã được bảo vệ bằng mã PIN. Vui lòng nhập đúng mã PIN 4 số hoặc dùng tên khác.';
-          errEl.classList.remove('hidden');
-          pinInput?.focus();
+          errorEl.textContent = `Tên "${existing.name}" đã được bảo vệ bằng mã PIN 4 số. Vui lòng nhập đúng PIN để chỉnh sửa.`;
+          errorEl.classList.remove('hidden');
+          pinInput.focus();
           return;
         }
 
-        errEl.classList.add('hidden');
         state.currentParticipant = {
           id: existing.id,
           name: existing.name,
-          pin: existing.pin || ''
+          pin: existing.pin || pin || ''
         };
-        state.mySelectedSlots = new Set(Array.isArray(existing.slots) ? existing.slots : []);
-        renderActiveEventView();
+        state.mySelectedSlots = new Set(existing.slots || []);
+        renderYourPanel();
         showToast(`Chào mừng ${existing.name} quay lại!`);
         return;
       }
 
-      // Tạo người tham gia mới
-      errEl.classList.add('hidden');
-      const safeSlug = name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || 'user';
-      const participantId = `${event.id}_${safeSlug}_${Date.now().toString(36)}`;
+      const slug = rawName
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_|_$/g, '') || 'user';
+      const participantDocId = `${state.currentEventId}__${slug}_${Date.now().toString(36).slice(-4)}`;
 
-      const newResponse = {
-        id: participantId,
-        eventId: event.id,
-        name,
+      const newResp = {
+        id: participantDocId,
+        eventId: state.currentEventId,
+        name: rawName,
         pin: pin || '',
         slots: [],
-        createdAt: Date.now(),
         updatedAt: Date.now()
       };
 
-      state.currentParticipant = { id: participantId, name, pin: pin || '' };
+      state.currentParticipant = {
+        id: newResp.id,
+        name: newResp.name,
+        pin: newResp.pin
+      };
       state.mySelectedSlots = new Set();
 
-      await persistParticipantResponse(newResponse);
-      renderActiveEventView();
-      showToast(`Đã tham gia với tên "${name}"`);
+      await persistParticipantResponse(newResp);
+      renderYourPanel();
+      showToast(`Đã tham gia với tên ${rawName}!`);
     }
 
     async function saveMyAvailabilitySlots() {
-      const event = getActiveEvent();
-      if (!event || !state.currentParticipant) return;
+      if (!state.currentParticipant || !state.currentEventId) return;
 
-      const responses = getEventResponses(event.id);
-      const existing = responses.find((r) => r.id === state.currentParticipant.id);
-
-      const updatedDoc = {
+      const respObj = {
         id: state.currentParticipant.id,
-        eventId: event.id,
+        eventId: state.currentEventId,
         name: state.currentParticipant.name,
         pin: state.currentParticipant.pin || '',
         slots: Array.from(state.mySelectedSlots),
-        createdAt: existing?.createdAt || Date.now(),
         updatedAt: Date.now()
       };
 
-      await persistParticipantResponse(updatedDoc);
+      await persistParticipantResponse(respObj);
     }
 
     // =========================================================================
-    // 8. LƯỚI CHỌN GIỜ CÁ NHÂN (HỖ TRỢ KÉO VÙNG CHỮ NHẬT CHUỘT & CẢM ỨNG)
+    // 8. LƯỚI CHỌN GIỜ CÁ NHÂN (TÁCH RIÊNG TỪNG BẢNG NGÀY)
     // =========================================================================
     function renderMyAvailabilityGrid(event) {
       const container = document.getElementById('my-availability-grid');
@@ -1652,37 +1609,42 @@
 
       const dates = event.dates || [];
       const slotMinutes = getEventSlotMinutes(event);
-      const colMinWidth = dates.length > 5 ? '58px' : '1fr';
+      const wrapperColsClass = dates.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1';
 
-      let html = `<div class="grid" style="grid-template-columns: 54px repeat(${dates.length}, minmax(${colMinWidth}, 1fr));">`;
+      let html = `<div class="grid ${wrapperColsClass} gap-3.5">`;
 
-      // Góc trống trên cùng bên trái
-      html += `<div class="sticky left-0 z-10 bg-[#FAF9F6] border-b border-r border-[#E5E2DC] p-2"></div>`;
-
-      // Tiêu đề các ngày
-      dates.forEach((dateKey) => {
+      dates.forEach((dateKey, cIdx) => {
         const info = formatDateHeader(dateKey);
-        html += `
-          <div class="bg-[#FAF9F6] border-b border-r last:border-r-0 border-[#E5E2DC] py-2 px-1 text-center">
-            <div class="text-[11px] font-bold text-slate-800">${info.weekday}</div>
-            <div class="text-[11px] text-slate-500">${info.dayMonth}</div>
-          </div>
-        `;
-      });
-
-      // Các dòng khung giờ
-      slotMinutes.forEach((minute, rIdx) => {
-        const isHourStart = minute % 60 === 0;
-        const borderClass = isHourStart ? 'slot-border-hour' : 'slot-border-half';
-        const timeLabel = isHourStart ? formatMinutesToTime(minute) : '';
+        const allDaySelected = slotMinutes.length > 0 && slotMinutes.every((m) => state.mySelectedSlots.has(makeSlotKey(dateKey, m)));
+        const headerAccentClass = info.isSunday
+          ? 'text-rose-700'
+          : (info.isWeekend ? 'text-emerald-800' : 'text-slate-900');
 
         html += `
-          <div class="sticky left-0 z-10 bg-white border-r border-[#E5E2DC] ${borderClass} pr-2 flex items-start justify-end text-[11px] font-medium text-slate-400 h-7">
-            <span class="-mt-2 bg-white px-0.5">${timeLabel}</span>
-          </div>
+          <div class="rounded-xl border border-[#E5E2DC] bg-white overflow-hidden shadow-2xs">
+            <!-- Tiêu đề riêng của từng ngày -->
+            <div class="bg-[#FAF9F6] border-b border-[#E5E2DC] px-3 py-2.5 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs sm:text-sm font-bold ${headerAccentClass}">${info.weekdayFull}</span>
+                <span class="text-xs font-medium text-slate-500 bg-white px-2 py-0.5 rounded-md border border-[#E5E2DC]">${info.dayMonth}</span>
+              </div>
+              <button
+                type="button"
+                data-toggle-day="${dateKey}"
+                class="day-quick-toggle-btn text-[11px] font-medium px-2 py-1 rounded-lg border transition-colors cursor-pointer ${allDaySelected ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200' : 'bg-white text-slate-600 border-[#E5E2DC] hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'}"
+              >
+                ${allDaySelected ? 'Bỏ chọn ngày' : 'Chọn cả ngày'}
+              </button>
+            </div>
+
+            <!-- Lưới khung giờ riêng của ngày -->
+            <div class="grid" style="grid-template-columns: 50px minmax(0, 1fr);">
         `;
 
-        dates.forEach((dateKey, cIdx) => {
+        slotMinutes.forEach((minute, rIdx) => {
+          const isHourStart = minute % 60 === 0;
+          const borderClass = isHourStart ? 'slot-border-hour' : 'slot-border-half';
+          const timeLabel = isHourStart ? formatMinutesToTime(minute) : '';
           const slotKey = makeSlotKey(dateKey, minute);
           const isSelected = state.mySelectedSlots.has(slotKey);
           const bgClass = isSelected
@@ -1690,18 +1652,47 @@
             : 'bg-white hover:bg-emerald-50';
 
           html += `
+            <div class="bg-white border-r border-[#E5E2DC] ${borderClass} pr-2 flex items-start justify-end text-[11px] font-medium text-slate-400 h-7">
+              <span class="-mt-2 bg-white px-0.5">${timeLabel}</span>
+            </div>
             <div
               data-slot-key="${slotKey}"
               data-r="${rIdx}"
               data-c="${cIdx}"
-              class="my-slot-cell slot-cell h-7 border-r last:border-r-0 border-[#E5E2DC] ${borderClass} ${bgClass} cursor-pointer"
+              class="my-slot-cell slot-cell h-7 ${borderClass} ${bgClass} cursor-pointer"
             ></div>
           `;
         });
+
+        html += `
+            </div>
+          </div>
+        `;
       });
 
       html += `</div>`;
       container.innerHTML = html;
+
+      // Gắn nút chọn nhanh / bỏ chọn cả ngày cho từng bảng
+      container.querySelectorAll('.day-quick-toggle-btn').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const targetDate = btn.getAttribute('data-toggle-day');
+          if (!targetDate) return;
+
+          const dayKeys = slotMinutes.map((m) => makeSlotKey(targetDate, m));
+          const isAllSelected = dayKeys.every((k) => state.mySelectedSlots.has(k));
+
+          if (isAllSelected) {
+            dayKeys.forEach((k) => state.mySelectedSlots.delete(k));
+          } else {
+            dayKeys.forEach((k) => state.mySelectedSlots.add(k));
+          }
+
+          renderMyAvailabilityGrid(event);
+          await saveMyAvailabilitySlots();
+        });
+      });
     }
 
     function computeRectPreviewSet(event) {
@@ -1785,7 +1776,6 @@
       if (minLegend) minLegend.textContent = `0/${totalPeople} rảnh`;
       if (maxLegend) maxLegend.textContent = `${totalPeople}/${totalPeople} rảnh`;
 
-      // Đếm số người rảnh cho từng ô
       const slotCounts = new Map();
       activeResponses.forEach((resp) => {
         const slots = Array.isArray(resp.slots) ? resp.slots : [];
@@ -1796,9 +1786,8 @@
 
       const dates = event.dates || [];
       const slotMinutes = getEventSlotMinutes(event);
-      const colMinWidth = dates.length > 5 ? '58px' : '1fr';
+      const wrapperColsClass = dates.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1';
 
-      // Tự động chọn ô có nhiều người rảnh nhất làm ô xem trước mặc định nếu chưa chọn
       if (!state.inspectedSlotKey && dates.length > 0 && slotMinutes.length > 0) {
         let bestKey = makeSlotKey(dates[0], slotMinutes[0]);
         let bestCount = -1;
@@ -1815,31 +1804,30 @@
         state.inspectedSlotKey = bestKey;
       }
 
-      let html = `<div class="grid" style="grid-template-columns: 54px repeat(${dates.length}, minmax(${colMinWidth}, 1fr));">`;
-      html += `<div class="sticky left-0 z-10 bg-[#FAF9F6] border-b border-r border-[#E5E2DC] p-2"></div>`;
+      let html = `<div class="grid ${wrapperColsClass} gap-3.5">`;
 
       dates.forEach((dateKey) => {
         const info = formatDateHeader(dateKey);
-        html += `
-          <div class="bg-[#FAF9F6] border-b border-r last:border-r-0 border-[#E5E2DC] py-2 px-1 text-center">
-            <div class="text-[11px] font-bold text-slate-800">${info.weekday}</div>
-            <div class="text-[11px] text-slate-500">${info.dayMonth}</div>
-          </div>
-        `;
-      });
-
-      slotMinutes.forEach((minute) => {
-        const isHourStart = minute % 60 === 0;
-        const borderClass = isHourStart ? 'slot-border-hour' : 'slot-border-half';
-        const timeLabel = isHourStart ? formatMinutesToTime(minute) : '';
+        const headerAccentClass = info.isSunday
+          ? 'text-rose-700'
+          : (info.isWeekend ? 'text-emerald-800' : 'text-slate-900');
 
         html += `
-          <div class="sticky left-0 z-10 bg-white border-r border-[#E5E2DC] ${borderClass} pr-2 flex items-start justify-end text-[11px] font-medium text-slate-400 h-7">
-            <span class="-mt-2 bg-white px-0.5">${timeLabel}</span>
-          </div>
+          <div class="rounded-xl border border-[#E5E2DC] bg-white overflow-hidden shadow-2xs">
+            <!-- Tiêu đề riêng của từng ngày -->
+            <div class="bg-[#FAF9F6] border-b border-[#E5E2DC] px-3 py-2.5 flex items-center justify-between gap-2">
+              <span class="text-xs sm:text-sm font-bold ${headerAccentClass}">${info.weekdayFull}</span>
+              <span class="text-xs font-medium text-slate-500 bg-white px-2 py-0.5 rounded-md border border-[#E5E2DC]">${info.dayMonth}</span>
+            </div>
+
+            <!-- Lưới bản đồ nhiệt riêng của ngày -->
+            <div class="grid" style="grid-template-columns: 50px minmax(0, 1fr);">
         `;
 
-        dates.forEach((dateKey) => {
+        slotMinutes.forEach((minute) => {
+          const isHourStart = minute % 60 === 0;
+          const borderClass = isHourStart ? 'slot-border-hour' : 'slot-border-half';
+          const timeLabel = isHourStart ? formatMinutesToTime(minute) : '';
           const slotKey = makeSlotKey(dateKey, minute);
           const count = slotCounts.get(slotKey) || 0;
           const colorClass = getHeatmapColorClass(count, totalPeople);
@@ -1847,98 +1835,125 @@
           const ringClass = isInspected ? 'ring-2 ring-slate-900 z-10' : '';
 
           html += `
+            <div class="bg-white border-r border-[#E5E2DC] ${borderClass} pr-2 flex items-start justify-end text-[11px] font-medium text-slate-400 h-7">
+              <span class="-mt-2 bg-white px-0.5">${timeLabel}</span>
+            </div>
             <div
               data-heatmap-slot="${slotKey}"
-              class="heatmap-cell slot-cell h-7 border-r last:border-r-0 border-[#E5E2DC] ${borderClass} ${colorClass} ${ringClass} cursor-pointer"
+              class="heatmap-cell slot-cell h-7 ${borderClass} ${colorClass} ${ringClass} cursor-pointer"
             ></div>
           `;
         });
+
+        html += `
+            </div>
+          </div>
+        `;
       });
 
       html += `</div>`;
       container.innerHTML = html;
 
       container.querySelectorAll('.heatmap-cell').forEach((cell) => {
-        const inspectHandler = () => {
-          const slotKey = cell.getAttribute('data-heatmap-slot');
-          if (!slotKey || state.inspectedSlotKey === slotKey) return;
-          state.inspectedSlotKey = slotKey;
+        const slotKey = cell.getAttribute('data-heatmap-slot');
+        cell.addEventListener('mouseenter', () => {
+          if (slotKey && state.inspectedSlotKey !== slotKey) {
+            state.inspectedSlotKey = slotKey;
+            highlightInspectedCell(slotKey);
+            renderSlotInspector(event, responses);
+          }
+        });
+        cell.addEventListener('click', () => {
+          if (slotKey) {
+            state.inspectedSlotKey = slotKey;
+            highlightInspectedCell(slotKey);
+            renderSlotInspector(event, responses);
+          }
+        });
+      });
+    }
 
-          container.querySelectorAll('.heatmap-cell').forEach((c) => {
-            c.classList.remove('ring-2', 'ring-slate-900', 'z-10');
-          });
+    function highlightInspectedCell(slotKey) {
+      const container = document.getElementById('group-heatmap-grid');
+      if (!container) return;
+      container.querySelectorAll('.heatmap-cell').forEach((cell) => {
+        if (cell.getAttribute('data-heatmap-slot') === slotKey) {
           cell.classList.add('ring-2', 'ring-slate-900', 'z-10');
-          renderSlotInspector(event, responses);
-        };
-
-        cell.addEventListener('mouseenter', inspectHandler);
-        cell.addEventListener('click', inspectHandler);
+        } else {
+          cell.classList.remove('ring-2', 'ring-slate-900', 'z-10');
+        }
       });
     }
 
     function renderSlotInspector(event, responses) {
       const titleEl = document.getElementById('inspector-slot-title');
       const badgeEl = document.getElementById('inspector-fraction-badge');
-      const availEl = document.getElementById('inspector-available-list');
-      const unavailEl = document.getElementById('inspector-unavailable-list');
-      if (!titleEl || !badgeEl || !availEl || !unavailEl) return;
+      const availListEl = document.getElementById('inspector-available-list');
+      const unavailListEl = document.getElementById('inspector-unavailable-list');
+      if (!titleEl || !badgeEl || !availListEl || !unavailListEl) return;
 
       if (!state.inspectedSlotKey) {
-        titleEl.textContent = 'Chưa chọn khung giờ';
+        titleEl.textContent = 'Di chuột vào một ô trên bảng';
         badgeEl.textContent = `0/${responses.length} người rảnh`;
         return;
       }
 
-      const [dateKey, minuteStr] = state.inspectedSlotKey.split('_');
-      const startMin = Number(minuteStr);
-      const step = event.stepMinutes || 30;
+      const { dateKey, minute } = parseSlotKey(state.inspectedSlotKey);
+      const step = Number(event.stepMinutes) || 30;
       const dateInfo = formatDateHeader(dateKey);
+      titleEl.textContent = `${dateInfo.fullLabel} • ${formatMinutesToTime(minute)} - ${formatMinutesToTime(minute + step)}`;
 
-      titleEl.textContent = `${dateInfo.fullLabel} • ${formatMinutesToTime(startMin)} – ${formatMinutesToTime(startMin + step)}`;
-
-      const availablePeople = [];
-      const unavailablePeople = [];
+      const availableNames = [];
+      const unavailableNames = [];
 
       responses.forEach((resp) => {
-        const slots = Array.isArray(resp.slots) ? resp.slots : [];
-        if (slots.includes(state.inspectedSlotKey)) {
-          availablePeople.push(resp.name);
+        const hasSlot = Array.isArray(resp.slots) && resp.slots.includes(state.inspectedSlotKey);
+        if (hasSlot) {
+          availableNames.push(resp.name);
         } else {
-          unavailablePeople.push(resp.name);
+          unavailableNames.push(resp.name);
         }
       });
 
-      badgeEl.textContent = `${availablePeople.length}/${responses.length} người rảnh`;
+      badgeEl.textContent = `${availableNames.length}/${responses.length} người rảnh`;
 
-      availEl.innerHTML = availablePeople.length > 0
-        ? availablePeople.map((n) => `<span class="px-2 py-0.5 rounded-md bg-emerald-100/90 text-emerald-900 font-medium border border-emerald-200">${escapeHtml(n)}</span>`).join('')
-        : `<span class="text-slate-400 italic">Chưa có ai</span>`;
+      if (availableNames.length === 0) {
+        availListEl.innerHTML = `<span class="text-slate-400 italic">Chưa có ai rảnh giờ này</span>`;
+      } else {
+        availListEl.innerHTML = availableNames
+          .map((n) => `<span class="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-900 font-medium border border-emerald-200">${escapeHtml(n)}</span>`)
+          .join('');
+      }
 
-      unavailEl.innerHTML = unavailablePeople.length > 0
-        ? unavailablePeople.map((n) => `<span class="px-2 py-0.5 rounded-md bg-white text-slate-600 border border-[#E5E2DC]">${escapeHtml(n)}</span>`).join('')
-        : `<span class="text-slate-400 italic">Không có</span>`;
+      if (unavailableNames.length === 0) {
+        unavailListEl.innerHTML = `<span class="text-slate-400 italic">Tất cả đều rảnh</span>`;
+      } else {
+        unavailListEl.innerHTML = unavailableNames
+          .map((n) => `<span class="px-2.5 py-1 rounded-lg bg-white text-slate-500 border border-[#E5E2DC]">${escapeHtml(n)}</span>`)
+          .join('');
+      }
     }
 
     function renderParticipantsFilter(responses) {
       const listEl = document.getElementById('participants-filter-list');
-      const activeBadge = document.getElementById('filter-active-badge');
-      const activeLabel = document.getElementById('filter-active-label');
-      if (!listEl) return;
+      const filterBadge = document.getElementById('filter-active-badge');
+      const filterLabel = document.getElementById('filter-active-label');
+      if (!listEl || !filterBadge || !filterLabel) return;
 
       if (state.filterParticipantId) {
-        const found = responses.find((r) => r.id === state.filterParticipantId);
-        if (found && activeBadge && activeLabel) {
-          activeBadge.classList.remove('hidden');
-          activeBadge.classList.add('inline-flex');
-          activeLabel.textContent = `Đang lọc: ${found.name}`;
+        const filteredPerson = responses.find((r) => r.id === state.filterParticipantId);
+        if (filteredPerson) {
+          filterBadge.classList.remove('hidden');
+          filterBadge.classList.add('inline-flex');
+          filterLabel.textContent = `Đang lọc: ${filteredPerson.name}`;
         } else {
           state.filterParticipantId = null;
+          filterBadge.classList.add('hidden');
+          filterBadge.classList.remove('inline-flex');
         }
-      }
-
-      if (!state.filterParticipantId && activeBadge) {
-        activeBadge.classList.add('hidden');
-        activeBadge.classList.remove('inline-flex');
+      } else {
+        filterBadge.classList.add('hidden');
+        filterBadge.classList.remove('inline-flex');
       }
 
       if (responses.length === 0) {
@@ -1950,33 +1965,38 @@
         const isFiltered = state.filterParticipantId === resp.id;
         const slotCount = Array.isArray(resp.slots) ? resp.slots.length : 0;
         const btnClass = isFiltered
-          ? 'bg-emerald-600 text-white border-emerald-700 font-semibold'
+          ? 'bg-emerald-600 text-white border-emerald-700 font-semibold shadow-2xs'
           : 'bg-[#FAF9F6] hover:bg-emerald-50 text-slate-700 hover:text-emerald-800 border-[#E5E2DC]';
 
         return `
-          <button type="button" data-filter-person="${escapeHtml(resp.id)}" class="person-filter-btn px-2.5 py-1 rounded-lg text-xs border transition-colors cursor-pointer">
-            ${escapeHtml(resp.name)} <span class="opacity-75">(${slotCount})</span>
+          <button type="button" data-filter-id="${resp.id}" class="participant-chip px-3 py-1.5 rounded-xl text-xs border transition-all flex items-center gap-1.5 cursor-pointer ${btnClass}">
+            <span>${escapeHtml(resp.name)}</span>
+            <span class="text-[10px] opacity-75">(${slotCount})</span>
           </button>
         `;
       }).join('');
 
-      listEl.querySelectorAll('.person-filter-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const personId = btn.getAttribute('data-filter-person');
-          state.filterParticipantId = (state.filterParticipantId === personId) ? null : personId;
-          renderActiveEventView();
+      listEl.querySelectorAll('.participant-chip').forEach((chip) => {
+        chip.addEventListener('click', () => {
+          const pId = chip.getAttribute('data-filter-id');
+          state.filterParticipantId = state.filterParticipantId === pId ? null : pId;
+          const event = state.allEvents.find((ev) => ev.id === state.currentEventId);
+          if (event) {
+            renderGroupHeatmapGrid(event, responses);
+            renderParticipantsFilter(responses);
+          }
         });
       });
     }
 
     function renderBestTimes(event, responses) {
-      const listEl = document.getElementById('best-times-list');
-      if (!listEl) return;
+      const container = document.getElementById('best-times-list');
+      if (!container) return;
 
       if (responses.length === 0) {
-        listEl.innerHTML = `
-          <div class="col-span-full rounded-xl bg-[#FAF9F6] border border-dashed border-[#E5E2DC] p-5 text-center text-xs sm:text-sm text-slate-400">
-            Hãy nhập thời gian rảnh của bạn để hệ thống tự động gợi ý khung giờ lý tưởng nhất cho cả nhóm.
+        container.innerHTML = `
+          <div class="col-span-full rounded-xl border border-dashed border-[#E5E2DC] bg-[#FAF9F6]/60 p-5 text-center text-xs sm:text-sm text-slate-500">
+            Hãy nhập thời gian rảnh của bạn và mời thêm thành viên để hệ thống gợi ý khung giờ họp lý tưởng nhất.
           </div>
         `;
         return;
@@ -1984,66 +2004,57 @@
 
       const dates = event.dates || [];
       const slotMinutes = getEventSlotMinutes(event);
-      const step = event.stepMinutes || 30;
-      const blocks = [];
+      const step = Number(event.stepMinutes) || 30;
+      const intervals = [];
 
       dates.forEach((dateKey) => {
         let currentBlock = null;
 
         slotMinutes.forEach((minute) => {
           const slotKey = makeSlotKey(dateKey, minute);
-          const availNames = [];
-          responses.forEach((resp) => {
-            if (Array.isArray(resp.slots) && resp.slots.includes(slotKey)) {
-              availNames.push(resp.name);
-            }
-          });
+          const availPeople = responses
+            .filter((r) => Array.isArray(r.slots) && r.slots.includes(slotKey))
+            .map((r) => r.name);
 
-          const count = availNames.length;
-          if (count === 0) {
+          if (availPeople.length === 0) {
             if (currentBlock) {
-              blocks.push(currentBlock);
+              intervals.push(currentBlock);
               currentBlock = null;
             }
             return;
           }
 
-          const signature = availNames.slice().sort().join('|');
-          if (
-            currentBlock &&
-            currentBlock.count === count &&
-            currentBlock.signature === signature &&
-            currentBlock.endMinute === minute
-          ) {
+          const signature = `${availPeople.length}::${availPeople.slice().sort().join('|')}`;
+          if (currentBlock && currentBlock.signature === signature && currentBlock.endMinute === minute) {
             currentBlock.endMinute = minute + step;
           } else {
-            if (currentBlock) blocks.push(currentBlock);
+            if (currentBlock) intervals.push(currentBlock);
             currentBlock = {
               dateKey,
               startMinute: minute,
               endMinute: minute + step,
-              count,
-              names: availNames,
-              signature,
-              firstSlotKey: slotKey
+              count: availPeople.length,
+              names: availPeople,
+              signature
             };
           }
         });
 
-        if (currentBlock) blocks.push(currentBlock);
+        if (currentBlock) {
+          intervals.push(currentBlock);
+        }
       });
 
-      if (blocks.length === 0) {
-        listEl.innerHTML = `
-          <div class="col-span-full rounded-xl bg-[#FAF9F6] border border-dashed border-[#E5E2DC] p-5 text-center text-xs sm:text-sm text-slate-400">
-            Chưa có ô giờ nào được đánh dấu rảnh.
+      if (intervals.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full rounded-xl border border-dashed border-[#E5E2DC] bg-[#FAF9F6]/60 p-5 text-center text-xs sm:text-sm text-slate-500">
+            Các thành viên đã tham gia nhưng chưa tô chọn khung giờ rảnh nào.
           </div>
         `;
         return;
       }
 
-      // Sắp xếp: nhiều người rảnh nhất -> thời lượng dài nhất -> ngày giờ sớm nhất
-      blocks.sort((a, b) => {
+      intervals.sort((a, b) => {
         if (b.count !== a.count) return b.count - a.count;
         const durA = a.endMinute - a.startMinute;
         const durB = b.endMinute - b.startMinute;
@@ -2052,225 +2063,107 @@
         return a.startMinute - b.startMinute;
       });
 
-      const topBlocks = blocks.slice(0, 6);
-      const total = responses.length;
+      const topIntervals = intervals.slice(0, 6);
+      const totalPeople = responses.length;
 
-      listEl.innerHTML = topBlocks.map((blk, idx) => {
-        const dateInfo = formatDateHeader(blk.dateKey);
-        const durationMins = blk.endMinute - blk.startMinute;
-        const durationLabel = durationMins >= 60
-          ? `${(durationMins / 60).toFixed(durationMins % 60 === 0 ? 0 : 1)} tiếng`
-          : `${durationMins} phút`;
-        const isAllAvailable = blk.count === total;
+      container.innerHTML = topIntervals.map((item, index) => {
+        const dateInfo = formatDateHeader(item.dateKey);
+        const isTop = index === 0;
+        const cardStyle = isTop
+          ? 'bg-emerald-50/70 border-emerald-300 ring-1 ring-emerald-500/20'
+          : 'bg-[#FAF9F6] border-[#E5E2DC]';
 
         return `
-          <div data-best-slot="${blk.firstSlotKey}" class="best-time-card rounded-xl border ${idx === 0 ? 'border-emerald-300 bg-emerald-50/40' : 'border-[#E5E2DC] bg-[#FAF9F6]/60'} hover:border-emerald-400 p-4 space-y-2 transition-all cursor-pointer">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-xs font-semibold text-slate-600">${dateInfo.fullLabel}</span>
-              <span class="px-2 py-0.5 rounded-full text-xs font-bold ${isAllAvailable ? 'bg-emerald-600 text-white' : 'bg-emerald-100 text-emerald-800'}">
-                ${blk.count}/${total} người
+          <div data-jump-slot="${makeSlotKey(item.dateKey, item.startMinute)}" class="best-time-card rounded-xl border ${cardStyle} p-4 flex flex-col justify-between gap-2.5 cursor-pointer hover:border-emerald-400 transition-all">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="text-xs font-semibold text-slate-500">${dateInfo.fullLabel}</div>
+                <div class="text-base font-bold text-slate-900 mt-0.5">
+                  ${formatMinutesToTime(item.startMinute)} - ${formatMinutesToTime(item.endMinute)}
+                </div>
+              </div>
+              <span class="shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold ${item.count === totalPeople ? 'bg-emerald-600 text-white' : 'bg-white text-emerald-800 border border-emerald-200'}">
+                ${item.count}/${totalPeople} người
               </span>
             </div>
-            <div class="text-base font-bold text-slate-900">
-              ${formatMinutesToTime(blk.startMinute)} – ${formatMinutesToTime(blk.endMinute)}
-              <span class="text-xs font-normal text-slate-500 ml-1">(${durationLabel})</span>
+            <div class="text-xs text-slate-600 line-clamp-2">
+              <span class="font-medium text-slate-700">Rảnh:</span> ${item.names.map(escapeHtml).join(', ')}
             </div>
-            <p class="text-xs text-slate-600 line-clamp-1">
-              Rảnh: ${blk.names.map((n) => escapeHtml(n)).join(', ')}
-            </p>
           </div>
         `;
       }).join('');
 
-      listEl.querySelectorAll('.best-time-card').forEach((card) => {
+      container.querySelectorAll('.best-time-card').forEach((card) => {
         card.addEventListener('click', () => {
-          const slotKey = card.getAttribute('data-best-slot');
-          if (slotKey) {
-            state.inspectedSlotKey = slotKey;
-            state.mobileTab = 'group';
-            renderActiveEventView();
+          const jumpKey = card.getAttribute('data-jump-slot');
+          if (jumpKey) {
+            state.inspectedSlotKey = jumpKey;
+            setMobileTab('group');
+            highlightInspectedCell(jumpKey);
+            renderSlotInspector(event, responses);
+            document.getElementById('panel-group-availability').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
         });
       });
     }
 
     // =========================================================================
-    // 10. GẮN SỰ KIỆN TƯƠNG TÁC TOÀN CỤC (CHUỘT, CẢM ỨNG & BIỂU MẪU)
+    // 10. CHUYỂN TAB TRÊN ĐIỆN THOẠI & SỰ KIỆN KÉO THẢ CHUỘT / CẢM ỨNG
     // =========================================================================
-    function bindGlobalEvents() {
-      // Điều hướng đầu trang
-      document.getElementById('btn-go-home')?.addEventListener('click', navigateToHome);
-      document.getElementById('btn-new-event-top')?.addEventListener('click', navigateToHome);
+    function setMobileTab(tab) {
+      state.mobileTab = tab;
+      const mineTabBtn = document.getElementById('mobile-tab-mine');
+      const groupTabBtn = document.getElementById('mobile-tab-group');
+      const minePanel = document.getElementById('panel-your-availability');
+      const groupPanel = document.getElementById('panel-group-availability');
 
-      // Sao chép mã & link mời
-      const handleCopyCode = () => {
-        if (!state.currentEventId) return;
-        copyTextToClipboard(state.currentEventId, `Đã sao chép mã sự kiện: ${state.currentEventId}`);
-      };
-      const handleCopyLink = () => {
-        if (!state.currentEventId) return;
-        const url = getInviteUrl(state.currentEventId);
-        copyTextToClipboard(url, 'Đã sao chép đường link mời!');
-      };
+      if (!mineTabBtn || !groupTabBtn || !minePanel || !groupPanel) return;
 
-      document.getElementById('btn-header-copy-code')?.addEventListener('click', handleCopyCode);
-      document.getElementById('btn-copy-code-banner')?.addEventListener('click', handleCopyCode);
-      document.getElementById('btn-copy-link-banner')?.addEventListener('click', handleCopyLink);
+      if (tab === 'mine') {
+        mineTabBtn.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer';
+        groupTabBtn.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+        minePanel.classList.remove('hidden');
+        groupPanel.classList.add('hidden', 'lg:block');
+      } else {
+        groupTabBtn.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer';
+        mineTabBtn.className = 'py-2.5 px-3 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+        groupPanel.classList.remove('hidden');
+        minePanel.classList.add('hidden', 'lg:block');
+      }
+    }
 
-      // Biểu mẫu Tham gia sự kiện có sẵn
-      document.getElementById('join-event-form')?.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const inputEl = document.getElementById('input-join-code');
-        const errEl = document.getElementById('join-error-msg');
-        const code = extractEventCode(inputEl?.value || '');
-
-        if (!code) {
-          errEl.textContent = 'Vui lòng nhập mã sự kiện hoặc dán đường link mời hợp lệ.';
-          errEl.classList.remove('hidden');
-          inputEl?.focus();
-          return;
-        }
-
-        errEl.classList.add('hidden');
-        if (inputEl) inputEl.value = '';
-        navigateToEvent(code);
-      });
-
-      // Điều hướng lịch tháng
-      document.getElementById('btn-prev-month')?.addEventListener('click', () => {
-        state.calMonth -= 1;
-        if (state.calMonth < 0) {
-          state.calMonth = 11;
-          state.calYear -= 1;
-        }
-        renderCalendar();
-      });
-
-      document.getElementById('btn-next-month')?.addEventListener('click', () => {
-        state.calMonth += 1;
-        if (state.calMonth > 11) {
-          state.calMonth = 0;
-          state.calYear += 1;
-        }
-        renderCalendar();
-      });
-
-      document.getElementById('btn-cal-today')?.addEventListener('click', () => {
-        const t = new Date();
-        state.calYear = t.getFullYear();
-        state.calMonth = t.getMonth();
-        renderCalendar();
-      });
-
-      document.getElementById('btn-clear-dates')?.addEventListener('click', () => {
-        state.selectedDates.clear();
-        renderCalendar();
-      });
-
-      // Kéo chọn nhiều ngày trên lịch tháng (Chuột + Cảm ứng)
+    function bindInteractiveDragHandlers() {
       const calGrid = document.getElementById('calendar-grid');
       if (calGrid) {
         calGrid.addEventListener('pointerdown', (e) => {
           const btn = e.target.closest('.cal-day-btn');
           if (!btn) return;
-          const dateKey = btn.getAttribute('data-date');
+          e.preventDefault();
+          const dateKey = btn.dataset.dateKey;
           if (!dateKey) return;
 
           state.isCalDragging = true;
           state.calDragMode = state.selectedDates.has(dateKey) ? 'remove' : 'add';
-          applyCalendarDateAction(dateKey, state.calDragMode);
-        });
-
-        calGrid.addEventListener('pointermove', (e) => {
-          if (!state.isCalDragging) return;
-          const targetEl = document.elementFromPoint(e.clientX, e.clientY);
-          const btn = targetEl?.closest('.cal-day-btn');
-          if (!btn) return;
-          const dateKey = btn.getAttribute('data-date');
-          if (!dateKey) return;
-
-          if (state.calDragMode === 'add' && !state.selectedDates.has(dateKey)) {
-            applyCalendarDateAction(dateKey, 'add');
-          } else if (state.calDragMode === 'remove' && state.selectedDates.has(dateKey)) {
-            applyCalendarDateAction(dateKey, 'remove');
+          if (state.calDragMode === 'add') {
+            state.selectedDates.add(dateKey);
+          } else {
+            state.selectedDates.delete(dateKey);
           }
+          renderCalendarGrid();
         });
       }
 
-      // Chọn độ chia khung giờ (30 phút / 1 tiếng)
-      document.querySelectorAll('.step-option-btn').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const step = Number(btn.getAttribute('data-step')) || 30;
-          state.stepMinutes = step;
-          document.querySelectorAll('.step-option-btn').forEach((b) => {
-            const active = Number(b.getAttribute('data-step')) === step;
-            b.className = active
-              ? 'step-option-btn py-2 px-3 rounded-lg text-xs font-semibold bg-white text-emerald-700 shadow-2xs border border-[#E5E2DC] transition-all cursor-pointer'
-              : 'step-option-btn py-2 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
-          });
-          updateCreateSummary();
-        });
-      });
-
-      // Nút tạo lịch hẹn
-      document.getElementById('btn-create-event')?.addEventListener('click', handleCreateEvent);
-
-      // Chuyển tab trên di động
-      document.getElementById('mobile-tab-mine')?.addEventListener('click', () => {
-        state.mobileTab = 'mine';
-        updateMobileTabVisibility();
-      });
-      document.getElementById('mobile-tab-group')?.addEventListener('click', () => {
-        state.mobileTab = 'group';
-        updateMobileTabVisibility();
-      });
-
-      // Đăng nhập / Đổi người tham gia
-      document.getElementById('signin-form')?.addEventListener('submit', handleParticipantSignIn);
-      document.getElementById('btn-signout-participant')?.addEventListener('click', () => {
-        state.currentParticipant = null;
-        state.mySelectedSlots = new Set();
-        renderActiveEventView();
-      });
-
-      // Chọn hết / Xóa hết ô giờ cá nhân
-      document.getElementById('btn-select-all-slots')?.addEventListener('click', async () => {
-        const event = getActiveEvent();
-        if (!event || !state.currentParticipant) return;
-        const slotMinutes = getEventSlotMinutes(event);
-        (event.dates || []).forEach((d) => {
-          slotMinutes.forEach((m) => state.mySelectedSlots.add(makeSlotKey(d, m)));
-        });
-        renderMyAvailabilityGrid(event);
-        await saveMyAvailabilitySlots();
-      });
-
-      document.getElementById('btn-clear-all-slots')?.addEventListener('click', async () => {
-        const event = getActiveEvent();
-        if (!event || !state.currentParticipant) return;
-        state.mySelectedSlots.clear();
-        renderMyAvailabilityGrid(event);
-        await saveMyAvailabilitySlots();
-      });
-
-      // Bỏ lọc thành viên
-      document.getElementById('btn-clear-filter')?.addEventListener('click', () => {
-        state.filterParticipantId = null;
-        renderActiveEventView();
-      });
-
-      // Kéo vùng chữ nhật trên lưới thời gian cá nhân
       const myGrid = document.getElementById('my-availability-grid');
       if (myGrid) {
         myGrid.addEventListener('pointerdown', (e) => {
-          const event = getActiveEvent();
-          if (!event || !state.currentParticipant) return;
           const cell = e.target.closest('.my-slot-cell');
-          if (!cell) return;
+          if (!cell || !state.currentParticipant) return;
+          e.preventDefault();
 
           const slotKey = cell.getAttribute('data-slot-key');
           const r = Number(cell.getAttribute('data-r'));
           const c = Number(cell.getAttribute('data-c'));
+          if (!slotKey) return;
 
           state.isSlotDragging = true;
           state.slotDragMode = state.mySelectedSlots.has(slotKey) ? 'remove' : 'add';
@@ -2278,42 +2171,64 @@
           state.slotDragCurrent = { r, c };
           state.slotDragBaseSet = new Set(state.mySelectedSlots);
 
-          const preview = computeRectPreviewSet(event);
-          applyVisualMySlots(preview);
-        });
-
-        myGrid.addEventListener('pointermove', (e) => {
-          if (!state.isSlotDragging) return;
-          const event = getActiveEvent();
-          if (!event) return;
-
-          const targetEl = document.elementFromPoint(e.clientX, e.clientY);
-          const cell = targetEl?.closest('.my-slot-cell');
-          if (!cell) return;
-
-          const r = Number(cell.getAttribute('data-r'));
-          const c = Number(cell.getAttribute('data-c'));
-          if (state.slotDragCurrent && state.slotDragCurrent.r === r && state.slotDragCurrent.c === c) {
-            return;
+          const event = state.allEvents.find((ev) => ev.id === state.currentEventId);
+          if (event) {
+            const preview = computeRectPreviewSet(event);
+            applyVisualMySlots(preview);
           }
-
-          state.slotDragCurrent = { r, c };
-          const preview = computeRectPreviewSet(event);
-          applyVisualMySlots(preview);
         });
       }
 
-      // Kết thúc kéo thả toàn cục
-      const finishDragging = async () => {
+      window.addEventListener('pointermove', (e) => {
+        if (state.isCalDragging) {
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          const btn = el ? el.closest('.cal-day-btn') : null;
+          if (btn && btn.dataset.dateKey) {
+            const dk = btn.dataset.dateKey;
+            const changed = state.calDragMode === 'add'
+              ? !state.selectedDates.has(dk)
+              : state.selectedDates.has(dk);
+            if (changed) {
+              if (state.calDragMode === 'add') state.selectedDates.add(dk);
+              else state.selectedDates.delete(dk);
+              renderCalendarGrid();
+            }
+          }
+        }
+
+        if (state.isSlotDragging) {
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          const cell = el ? el.closest('.my-slot-cell') : null;
+          if (cell) {
+            const r = Number(cell.getAttribute('data-r'));
+            const c = Number(cell.getAttribute('data-c'));
+            if (
+              !state.slotDragCurrent ||
+              state.slotDragCurrent.r !== r ||
+              state.slotDragCurrent.c !== c
+            ) {
+              state.slotDragCurrent = { r, c };
+              const event = state.allEvents.find((ev) => ev.id === state.currentEventId);
+              if (event) {
+                const preview = computeRectPreviewSet(event);
+                applyVisualMySlots(preview);
+              }
+            }
+          }
+        }
+      });
+
+      const finishAnyDrag = async () => {
         if (state.isCalDragging) {
           state.isCalDragging = false;
           state.calDragMode = null;
         }
 
         if (state.isSlotDragging) {
-          const event = getActiveEvent();
+          const event = state.allEvents.find((ev) => ev.id === state.currentEventId);
           if (event) {
             state.mySelectedSlots = computeRectPreviewSet(event);
+            renderMyAvailabilityGrid(event);
           }
           state.isSlotDragging = false;
           state.slotDragMode = null;
@@ -2325,23 +2240,167 @@
         }
       };
 
-      window.addEventListener('pointerup', finishDragging);
-      window.addEventListener('pointercancel', finishDragging);
+      window.addEventListener('pointerup', finishAnyDrag);
+      window.addEventListener('pointercancel', finishAnyDrag);
+    }
+
+    // =========================================================================
+    // 11. KHỞI CHẠY & GẮN SỰ KIỆN NÚT BẤM
+    // =========================================================================
+    function copyCurrentEventCode() {
+      if (!state.currentEventId) return;
+      const ok = copyTextToClipboard(state.currentEventId);
+      if (ok) {
+        showToast(`Đã sao chép mã sự kiện: ${state.currentEventId}`);
+      } else {
+        showToast(`Mã sự kiện của bạn là: ${state.currentEventId}`);
+      }
+    }
+
+    function copyCurrentEventInvite() {
+      if (!state.currentEventId) return;
+      if (isShareableWebEnvironment()) {
+        const shareUrl = getEventShareUrl(state.currentEventId);
+        const ok = copyTextToClipboard(shareUrl);
+        showToast(ok ? 'Đã sao chép đường link mời sự kiện!' : `Link mời: ${shareUrl}`);
+      } else {
+        const ok = copyTextToClipboard(state.currentEventId);
+        showToast(
+          ok
+            ? `Đang ở chế độ xem trước — đã sao chép mã sự kiện "${state.currentEventId}" để bạn bè nhập ở trang chủ!`
+            : `Mã sự kiện: ${state.currentEventId}`
+        );
+      }
+    }
+
+    function initApp() {
+      initHourSelects();
+      renderCalendarGrid();
+      bindInteractiveDragHandlers();
+
+      // Điều hướng trên thanh tiêu đề
+      document.getElementById('btn-go-home').addEventListener('click', navigateToHome);
+      document.getElementById('btn-new-event-top').addEventListener('click', navigateToHome);
+      document.getElementById('btn-header-copy-code').addEventListener('click', copyCurrentEventCode);
+
+      // Sao chép mã & link mời trên biểu ngữ sự kiện
+      document.getElementById('btn-copy-code-banner').addEventListener('click', copyCurrentEventCode);
+      document.getElementById('btn-copy-link-banner').addEventListener('click', copyCurrentEventInvite);
+
+      // Biểu mẫu tham gia bằng mã ở trang chủ
+      document.getElementById('join-event-form').addEventListener('submit', handleJoinEventByCode);
+
+      // Điều hướng tháng trên lịch chọn ngày
+      document.getElementById('btn-prev-month').addEventListener('click', () => {
+        state.calMonth -= 1;
+        if (state.calMonth < 0) {
+          state.calMonth = 11;
+          state.calYear -= 1;
+        }
+        renderCalendarGrid();
+      });
+
+      document.getElementById('btn-next-month').addEventListener('click', () => {
+        state.calMonth += 1;
+        if (state.calMonth > 11) {
+          state.calMonth = 0;
+          state.calYear += 1;
+        }
+        renderCalendarGrid();
+      });
+
+      document.getElementById('btn-cal-today').addEventListener('click', () => {
+        const today = new Date();
+        state.calYear = today.getFullYear();
+        state.calMonth = today.getMonth();
+        renderCalendarGrid();
+      });
+
+      document.getElementById('btn-clear-dates').addEventListener('click', () => {
+        state.selectedDates.clear();
+        renderCalendarGrid();
+      });
+
+      // Cập nhật tóm tắt khi đổi giờ
+      document.getElementById('select-start-hour').addEventListener('change', updateCreateSummary);
+      document.getElementById('select-end-hour').addEventListener('change', updateCreateSummary);
+
+      // Chọn độ chia khung giờ (30 phút / 1 tiếng)
+      document.querySelectorAll('.step-option-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          state.stepMinutes = Number(btn.dataset.step) || 30;
+          document.querySelectorAll('.step-option-btn').forEach((b) => {
+            if (b === btn) {
+              b.className = 'step-option-btn py-2 px-3 rounded-lg text-xs font-semibold bg-white text-emerald-700 shadow-2xs border border-[#E5E2DC] transition-all cursor-pointer';
+            } else {
+              b.className = 'step-option-btn py-2 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 transition-all cursor-pointer';
+            }
+          });
+          updateCreateSummary();
+        });
+      });
+
+      // Tạo lịch hẹn mới
+      document.getElementById('btn-create-event').addEventListener('click', handleCreateEvent);
+      document.getElementById('input-event-title').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleCreateEvent();
+        }
+      });
+
+      // Đăng nhập / Đổi người tham gia
+      document.getElementById('signin-form').addEventListener('submit', handleParticipantSignIn);
+      document.getElementById('btn-signout-participant').addEventListener('click', () => {
+        state.currentParticipant = null;
+        state.mySelectedSlots = new Set();
+        renderYourPanel();
+      });
+
+      // Chọn hết / Xóa hết khung giờ của cá nhân
+      document.getElementById('btn-select-all-slots').addEventListener('click', async () => {
+        const event = state.allEvents.find((ev) => ev.id === state.currentEventId);
+        if (!event || !state.currentParticipant) return;
+        const slotMinutes = getEventSlotMinutes(event);
+        (event.dates || []).forEach((d) => {
+          slotMinutes.forEach((m) => state.mySelectedSlots.add(makeSlotKey(d, m)));
+        });
+        renderMyAvailabilityGrid(event);
+        await saveMyAvailabilitySlots();
+      });
+
+      document.getElementById('btn-clear-all-slots').addEventListener('click', async () => {
+        const event = state.allEvents.find((ev) => ev.id === state.currentEventId);
+        if (!event || !state.currentParticipant) return;
+        state.mySelectedSlots.clear();
+        renderMyAvailabilityGrid(event);
+        await saveMyAvailabilitySlots();
+      });
+
+      // Bỏ lọc thành viên
+      document.getElementById('btn-clear-filter').addEventListener('click', () => {
+        state.filterParticipantId = null;
+        const event = state.allEvents.find((ev) => ev.id === state.currentEventId);
+        const responses = state.allResponses.filter((r) => r.eventId === state.currentEventId);
+        if (event) {
+          renderGroupHeatmapGrid(event, responses);
+          renderParticipantsFilter(responses);
+        }
+      });
+
+      // Chuyển tab trên mobile
+      document.getElementById('mobile-tab-mine').addEventListener('click', () => setMobileTab('mine'));
+      document.getElementById('mobile-tab-group').addEventListener('click', () => setMobileTab('group'));
+
+      // Theo dõi thay đổi hash trên trình duyệt
       window.addEventListener('hashchange', handleRouteChange);
-    }
 
-    // =========================================================================
-    // 11. KHỞI CHẠY ỨNG DỤNG
-    // =========================================================================
-    async function bootstrap() {
-      initTimeSelects();
-      renderCalendar();
-      bindGlobalEvents();
+      // Kiểm tra tuyến đường ban đầu & khởi động đồng bộ
       handleRouteChange();
-      await initDataLayer();
+      initBackend();
     }
 
-    bootstrap();
+    initApp();
   </script>
 </body>
 </html>
